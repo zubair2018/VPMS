@@ -1,0 +1,14 @@
+{
+  "name": "visitor-pass-management-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "server": "npm run dev --prefix backend",
+    "client": "npm start --prefix frontend",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm start --prefix frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
