@@ -113,7 +113,7 @@ TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 ### Frontend (`frontend/.env`)
 
 ```env
-VITE_API_BASE_URL=http://localhost:5000/api
+VITE_API_BASE_URL=http://localhost:5000
 ```
 
 ## Running the Project
@@ -164,10 +164,10 @@ If Twilio is configured, the system sends an SMS to the visitor when a pass is g
 
 Example dummy emails you can use:
 
-- Admin: `admin@example.com`
-- Security: `security1@example.com`
-- Employee: `employee1@example.com`
-- Visitor: `visitor.one@testmail.com`
+- Admin: `admin@vpms.example.com`
+- Security: `security@vpms.example.com`
+- Employee: `employee@vpms.example.com`
+- Visitor: `visitor@vpms.example.com`
 
 Passwords depend on your seed data or registration flow.
 
