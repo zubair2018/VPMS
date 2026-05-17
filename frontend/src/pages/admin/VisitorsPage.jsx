@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axios';
 
 const initialForm = {
@@ -8,12 +8,11 @@ const initialForm = {
   company: '',
   purpose: '',
   idProofType: '',
-  idProofNumber: ''
+  idProofNumber: '',
 };
 
 const VisitorsPage = () => {
   const [visitors, setVisitors] = useState([]);
-  const [filteredVisitors, setFilteredVisitors] = useState([]);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState(initialForm);
   const [photo, setPhoto] = useState(null);
@@ -21,24 +20,13 @@ const VisitorsPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Keep this hard-coded to avoid env issues for now
-  const fileBaseUrl = 'http://localhost:5000';
-
   const loadVisitors = async () => {
     try {
       setError('');
       const res = await api.get('/visitors');
-      const data = Array.isArray(res.data) ? res.data : [];
-      setVisitors(data);
-      setFilteredVisitors(data);
+      setVisitors(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      setError(
-        (err &&
-          err.response &&
-          err.response.data &&
-          err.response.data.message) ||
-          'Failed to load visitors'
-      );
+      setError(err?.response?.data?.message || 'Failed to load visitors');
     }
   };
 
@@ -46,53 +34,41 @@ const VisitorsPage = () => {
     loadVisitors();
   }, []);
 
-  useEffect(() => {
-    const term = search.toLowerCase().trim();
+  // Filter visitors from the main list instead of storing another copy in state.
+  const filteredVisitors = useMemo(() => {
+    const term = search.trim().toLowerCase();
 
     if (!term) {
-      setFilteredVisitors(visitors);
-      return;
+      return visitors;
     }
 
-    const filtered = visitors.filter(function (visitor) {
-      const fullName =
-        visitor.fullName && typeof visitor.fullName === 'string'
-          ? visitor.fullName.toLowerCase()
-          : '';
-      const email =
-        visitor.email && typeof visitor.email === 'string'
-          ? visitor.email.toLowerCase()
-          : '';
-      const phone =
-        visitor.phone && typeof visitor.phone === 'string'
-          ? visitor.phone.toLowerCase()
-          : '';
-      const company =
-        visitor.company && typeof visitor.company === 'string'
-          ? visitor.company.toLowerCase()
-          : '';
-      const purpose =
-        visitor.purpose && typeof visitor.purpose === 'string'
-          ? visitor.purpose.toLowerCase()
-          : '';
+    return visitors.filter((visitor) => {
+      const valuesToSearch = [
+        visitor.fullName,
+        visitor.email,
+        visitor.phone,
+        visitor.company,
+        visitor.purpose,
+      ];
 
-      return (
-        fullName.includes(term) ||
-        email.includes(term) ||
-        phone.includes(term) ||
-        company.includes(term) ||
-        purpose.includes(term)
+      return valuesToSearch.some((value) =>
+        String(value || '').toLowerCase().includes(term)
       );
     });
-
-    setFilteredVisitors(filtered);
   }, [search, visitors]);
 
   const handleChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleFileChange = (e, setter) => {
+    const file = e.target.files?.[0] || null;
+    setter(file);
   };
 
   const submitHandler = async (e) => {
@@ -104,8 +80,8 @@ const VisitorsPage = () => {
 
       const formData = new FormData();
 
-      Object.keys(form).forEach(function (key) {
-        formData.append(key, form[key] || '');
+      Object.entries(form).forEach(([key, value]) => {
+        formData.append(key, value || '');
       });
 
       if (photo) {
@@ -118,8 +94,8 @@ const VisitorsPage = () => {
 
       await api.post('/visitors', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
       setForm(initialForm);
@@ -127,16 +103,20 @@ const VisitorsPage = () => {
       setIdProof(null);
       await loadVisitors();
     } catch (err) {
-      setError(
-        (err &&
-          err.response &&
-          err.response.data &&
-          err.response.data.message) ||
-          'Failed to create visitor'
-      );
+      setError(err?.response?.data?.message || 'Failed to create visitor');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Build a full file URL from the API base instead of hardcoding localhost.
+  const getFileUrl = (path) => {
+    if (!path) {
+      return '';
+    }
+
+    const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
+    return `${baseUrl}${path}`;
   };
 
   const exportCsv = () => {
@@ -153,35 +133,29 @@ const VisitorsPage = () => {
       'Purpose',
       'ID Proof Type',
       'ID Proof Number',
-      'Created At'
+      'Created At',
     ];
 
-    const rows = filteredVisitors.map(function (visitor) {
-      return [
-        visitor.fullName || '',
-        visitor.email || '',
-        visitor.phone || '',
-        visitor.company || '',
-        visitor.purpose || '',
-        visitor.idProofType || '',
-        visitor.idProofNumber || '',
-        visitor.createdAt ? new Date(visitor.createdAt).toLocaleString() : ''
-      ];
-    });
+    const rows = filteredVisitors.map((visitor) => [
+      visitor.fullName || '',
+      visitor.email || '',
+      visitor.phone || '',
+      visitor.company || '',
+      visitor.purpose || '',
+      visitor.idProofType || '',
+      visitor.idProofNumber || '',
+      visitor.createdAt ? new Date(visitor.createdAt).toLocaleString() : '',
+    ]);
 
-    const csvRows = [
+    const csvContent = [
       headers.join(','),
-      ...rows.map(function (row) {
-        return row
-          .map(function (value) {
-            return '"' + String(value).replace(/"/g, '""') + '"';
-          })
-          .join(',');
-      })
-    ];
+      ...rows.map((row) =>
+        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')
+      ),
+    ].join('\n');
 
-    const blob = new Blob([csvRows.join('\n')], {
-      type: 'text/csv;charset=utf-8;'
+    const blob = new Blob([csvContent], {
+      type: 'text/csv;charset=utf-8;',
     });
 
     const url = window.URL.createObjectURL(blob);
@@ -257,22 +231,14 @@ const VisitorsPage = () => {
         <input
           type="file"
           accept="image/*"
-          onChange={(e) =>
-            setPhoto(
-              e.target.files && e.target.files[0] ? e.target.files[0] : null
-            )
-          }
+          onChange={(e) => handleFileChange(e, setPhoto)}
         />
 
         <label>ID proof image</label>
         <input
           type="file"
           accept="image/*"
-          onChange={(e) =>
-            setIdProof(
-              e.target.files && e.target.files[0] ? e.target.files[0] : null
-            )
-          }
+          onChange={(e) => handleFileChange(e, setIdProof)}
         />
 
         {error ? <p className="error-text">{error}</p> : null}
@@ -283,25 +249,10 @@ const VisitorsPage = () => {
       </form>
 
       <div className="card">
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-            flexWrap: 'wrap',
-            marginBottom: '16px'
-          }}
-        >
-          <h3 style={{ margin: 0 }}>Visitors list</h3>
+        <div className="page-header-row">
+          <h3>Visitors list</h3>
 
-          <div
-            style={{
-              display: 'flex',
-              gap: '10px',
-              flexWrap: 'wrap'
-            }}
-          >
+          <div className="page-actions-row">
             <input
               type="text"
               placeholder="Search by name, email, phone"
@@ -315,7 +266,7 @@ const VisitorsPage = () => {
           </div>
         </div>
 
-        <p style={{ marginBottom: '12px' }}>
+        <p className="muted-text">
           Showing {filteredVisitors.length} of {visitors.length} visitors
         </p>
 
@@ -323,42 +274,40 @@ const VisitorsPage = () => {
           {filteredVisitors.length === 0 ? (
             <p>No visitors found.</p>
           ) : (
-            filteredVisitors.map(function (visitor) {
-              return (
-                <div className="list-item" key={visitor._id}>
-                  <strong>{visitor.fullName}</strong>
-                  <span>{visitor.email}</span>
-                  <span>{visitor.phone}</span>
-                  <span>{visitor.company || 'No company'}</span>
-                  <span>{visitor.purpose}</span>
-                  <span>
-                    {visitor.createdAt
-                      ? new Date(visitor.createdAt).toLocaleString()
-                      : 'No date'}
-                  </span>
+            filteredVisitors.map((visitor) => (
+              <div className="list-item" key={visitor._id}>
+                <strong>{visitor.fullName}</strong>
+                <span>{visitor.email}</span>
+                <span>{visitor.phone}</span>
+                <span>{visitor.company || 'No company'}</span>
+                <span>{visitor.purpose}</span>
+                <span>
+                  {visitor.createdAt
+                    ? new Date(visitor.createdAt).toLocaleString()
+                    : 'No date'}
+                </span>
 
-                  {visitor.photoUrl ? (
-                    <a
-                      href={fileBaseUrl + visitor.photoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open photo
-                    </a>
-                  ) : null}
+                {visitor.photoUrl ? (
+                  <a
+                    href={getFileUrl(visitor.photoUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open photo
+                  </a>
+                ) : null}
 
-                  {visitor.idProofUrl ? (
-                    <a
-                      href={fileBaseUrl + visitor.idProofUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open ID proof
-                    </a>
-                  ) : null}
-                </div>
-              );
-            })
+                {visitor.idProofUrl ? (
+                  <a
+                    href={getFileUrl(visitor.idProofUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open ID proof
+                  </a>
+                ) : null}
+              </div>
+            ))
           )}
         </div>
       </div>

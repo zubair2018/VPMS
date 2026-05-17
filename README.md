@@ -23,54 +23,12 @@ A full-stack Visitor Pass Management System built using the MERN stack (MongoDB,
 
 ## Project Structure
 
-```bash
-project-root/
-├── backend/
-│   ├── controllers/
-│   │   ├── authController.js
-│   │   ├── visitorController.js
-│   │   ├── appointmentController.js
-│   │   └── passController.js
-│   ├── models/
-│   │   ├── User.js
-│   │   ├── Visitor.js
-│   │   ├── Appointment.js
-│   │   ├── Pass.js
-│   │   └── CheckLog.js
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   ├── visitorRoutes.js
-│   │   ├── appointmentRoutes.js
-│   │   └── passRoutes.js
-│   ├── utils/
-│   │   ├── generatePassAssets.js
-│   │   └── sendSms.js
-│   ├── middleware/
-│   │   └── authMiddleware.js
-│   ├── server.js
-│   └── .env
-├── frontend/
-│   ├── src/
-│   │   ├── api/axios.js
-│   │   ├── context/AuthContext.jsx
-│   │   ├── components/ProtectedRoute.jsx
-│   │   ├── layouts/DashboardLayout.jsx
-│   │   ├── pages/
-│   │   │   ├── auth/LoginPage.jsx
-│   │   │   ├── auth/RegisterPage.jsx
-│   │   │   ├── admin/DashboardPage.jsx
-│   │   │   ├── admin/VisitorsPage.jsx
-│   │   │   ├── admin/AppointmentsPage.jsx
-│   │   │   ├── admin/PassesPage.jsx
-│   │   │   ├── security/ScanPage.jsx
-│   │   │   ├── public/VisitorRegisterPage.jsx
-│   │   │   └── public/VisitorPassLookupPage.jsx
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   └── .env
-├── README.md
-└── package.json
-```
+>frontend
+>backend
+.gitignore
+package-lock.json
+package.json
+>screenshots
 
 ## Getting Started
 
@@ -82,7 +40,6 @@ project-root/
 
 ### Installation
 
-```bash
 git clone <your_repo_url>
 cd project-root
 
@@ -93,13 +50,11 @@ npm install
 # install frontend
 cd ../frontend
 npm install
-```
 
 ## Environment Variables
 
 ### Backend (`backend/.env`)
 
-```env
 PORT=5000
 MONGODB_URI=mongodb://127.0.0.1:27017/visitor-pass
 JWT_SECRET=your_jwt_secret_here
@@ -108,29 +63,24 @@ FILE_UPLOAD_PATH=uploads
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
-```
+
+cannot share the .env files .
 
 ### Frontend (`frontend/.env`)
 
-```env
 VITE_API_BASE_URL=http://localhost:5000
-```
 
 ## Running the Project
 
 ### Start backend
 
-```bash
 cd backend
 npm run dev
-```
 
 ### Start frontend
 
-```bash
 cd frontend
 npm run dev
-```
 
 The frontend usually runs on `http://localhost:5173` and backend on `http://localhost:5000`.
 

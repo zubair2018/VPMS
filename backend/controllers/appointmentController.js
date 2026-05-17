@@ -9,14 +9,23 @@ const createAppointment = async (req, res) => {
 
     if (!visitor || !host || !visitDate) {
       return res.status(400).json({
-        message: 'Visitor, host, and visit date are required'
+        message: 'visitor, host and visitDate are required',
       });
     }
 
+    const visitorDoc = await Visitor.findById(visitor);
+    if (!visitorDoc) {
+      return res.status(404).json({ message: 'Visitor not found' });
+    }
+
     const hostUser = await User.findById(host);
-    if (!hostUser || hostUser.role !== 'employee') {
+    if (!hostUser) {
+      return res.status(404).json({ message: 'Host user not found' });
+    }
+
+    if (hostUser.role !== 'employee') {
       return res.status(400).json({
-        message: 'Selected host must be a valid employee'
+        message: 'Selected host must be an employee',
       });
     }
 
@@ -24,26 +33,31 @@ const createAppointment = async (req, res) => {
       visitor,
       host,
       visitDate,
-      notes
+      notes,
     });
 
     const populatedAppointment = await Appointment.findById(appointment._id)
       .populate('visitor')
       .populate('host', 'name email role');
 
-    const visitorDoc = await Visitor.findById(visitor);
-
-    if (visitorDoc?.email) {
+    if (visitorDoc.email) {
       await sendEmail({
         to: visitorDoc.email,
         subject: 'Visit appointment created',
-        html: `<p>Your appointment with ${hostUser.name} has been created and is awaiting approval.</p>`
+        html: `
+          <p>Hello ${visitorDoc.fullName},</p>
+          <p>Your appointment with ${hostUser.name} has been created and is waiting for approval.</p>
+          <p><strong>Visit Date:</strong> ${new Date(visitDate).toLocaleString()}</p>
+          <p><strong>Notes:</strong> ${notes || 'No notes added'}</p>
+        `,
       });
     }
 
-    res.status(201).json(populatedAppointment);
+    return res.status(201).json(populatedAppointment);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({
+      message: error.message || 'Failed to create appointment',
+    });
   }
 };
 
@@ -56,22 +70,39 @@ const getAppointments = async (req, res) => {
       .populate('host', 'name email role')
       .sort({ createdAt: -1 });
 
-    res.json(appointments);
+    return res.json(appointments);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({
+      message: error.message || 'Failed to load appointments',
+    });
   }
 };
 
 const updateAppointmentStatus = async (req, res) => {
   try {
+    const { status, notes } = req.body;
+
     const appointment = await Appointment.findById(req.params.id);
 
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
 
-    appointment.status = req.body.status || appointment.status;
-    appointment.notes = req.body.notes ?? appointment.notes;
+    const allowedStatuses = ['pending', 'approved', 'rejected', 'completed'];
+
+    if (status && !allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        message: 'Invalid appointment status',
+      });
+    }
+
+    if (status) {
+      appointment.status = status;
+    }
+
+    if (notes !== undefined) {
+      appointment.notes = notes;
+    }
 
     await appointment.save();
 
@@ -79,14 +110,16 @@ const updateAppointmentStatus = async (req, res) => {
       .populate('visitor')
       .populate('host', 'name email role');
 
-    res.json(populatedAppointment);
+    return res.json(populatedAppointment);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({
+      message: error.message || 'Failed to update appointment',
+    });
   }
 };
 
 module.exports = {
   createAppointment,
   getAppointments,
-  updateAppointmentStatus
+  updateAppointmentStatus,
 };

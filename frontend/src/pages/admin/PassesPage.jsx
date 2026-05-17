@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axios';
 
 const PassesPage = () => {
@@ -16,34 +16,36 @@ const PassesPage = () => {
     try {
       setError('');
 
-      const passesRes = await api.get('/passes');
-      const visitorsRes = await api.get('/visitors');
-      const appointmentsRes = await api.get('/appointments');
+      const [passesRes, visitorsRes, appointmentsRes] = await Promise.all([
+        api.get('/passes'),
+        api.get('/visitors'),
+        api.get('/appointments'),
+      ]);
 
       setPasses(Array.isArray(passesRes.data) ? passesRes.data : []);
       setVisitors(Array.isArray(visitorsRes.data) ? visitorsRes.data : []);
-
-      const approvedAppointments = Array.isArray(appointmentsRes.data)
-        ? appointmentsRes.data.filter(function (item) {
-            return item.status === 'approved';
-          })
-        : [];
-
-      setAppointments(approvedAppointments);
+      setAppointments(Array.isArray(appointmentsRes.data) ? appointmentsRes.data : []);
     } catch (err) {
-      setError(
-        (err &&
-          err.response &&
-          err.response.data &&
-          err.response.data.message) ||
-          'Failed to load passes data'
-      );
+      setError(err?.response?.data?.message || 'Failed to load passes data');
     }
   };
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const approvedAppointments = useMemo(() => {
+    return appointments.filter((item) => item.status === 'approved');
+  }, [appointments]);
+
+  const getFileUrl = (path) => {
+    if (!path) {
+      return '';
+    }
+
+    const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
+    return `${baseUrl}${path}`;
+  };
 
   const submitHandler = async (e) => {
     e.preventDefault();
@@ -58,10 +60,10 @@ const PassesPage = () => {
       setError('');
 
       await api.post('/passes', {
-        visitorId: visitorId,
-        appointmentId: appointmentId,
-        validFrom: validFrom,
-        validTill: validTill
+        visitorId,
+        appointmentId,
+        validFrom,
+        validTill,
       });
 
       setVisitorId('');
@@ -71,16 +73,61 @@ const PassesPage = () => {
 
       await loadData();
     } catch (err) {
-      setError(
-        (err &&
-          err.response &&
-          err.response.data &&
-          err.response.data.message) ||
-          'Failed to generate pass'
-      );
+      setError(err?.response?.data?.message || 'Failed to generate pass');
     } finally {
       setLoading(false);
     }
+  };
+
+  const exportCsv = () => {
+    if (passes.length === 0) {
+      alert('No pass data to export');
+      return;
+    }
+
+    const headers = [
+      'Pass Number',
+      'Visitor Name',
+      'Visitor Email',
+      'Status',
+      'Valid From',
+      'Valid Till',
+      'Appointment Host',
+      'Issued By',
+      'Created At',
+    ];
+
+    const rows = passes.map((pass) => [
+      pass.passNumber || '',
+      pass.visitor?.fullName || '',
+      pass.visitor?.email || '',
+      pass.status || '',
+      pass.validFrom ? new Date(pass.validFrom).toLocaleString() : '',
+      pass.validTill ? new Date(pass.validTill).toLocaleString() : '',
+      pass.appointment?.host?.name || '',
+      pass.issuedBy?.name || '',
+      pass.createdAt ? new Date(pass.createdAt).toLocaleString() : '',
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) =>
+        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')
+      ),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], {
+      type: 'text/csv;charset=utf-8;',
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'passes-report.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -95,13 +142,11 @@ const PassesPage = () => {
           onChange={(e) => setVisitorId(e.target.value)}
         >
           <option value="">Select visitor</option>
-          {visitors.map(function (visitor) {
-            return (
-              <option key={visitor._id} value={visitor._id}>
-                {visitor.fullName} - {visitor.email}
-              </option>
-            );
-          })}
+          {visitors.map((visitor) => (
+            <option key={visitor._id} value={visitor._id}>
+              {visitor.fullName} - {visitor.email}
+            </option>
+          ))}
         </select>
 
         <label htmlFor="appointmentId">Approved appointment (optional)</label>
@@ -111,13 +156,11 @@ const PassesPage = () => {
           onChange={(e) => setAppointmentId(e.target.value)}
         >
           <option value="">Select approved appointment</option>
-          {appointments.map(function (item) {
-            return (
-              <option key={item._id} value={item._id}>
-                {(item.visitor && item.visitor.fullName) || 'Visitor'} - {(item.host && item.host.name) || 'Host'}
-              </option>
-            );
-          })}
+          {approvedAppointments.map((item) => (
+            <option key={item._id} value={item._id}>
+              {item.visitor?.fullName || 'Visitor'} - {item.host?.name || 'Host'}
+            </option>
+          ))}
         </select>
 
         <label htmlFor="validFrom">Valid from</label>
@@ -144,47 +187,56 @@ const PassesPage = () => {
       </form>
 
       <div className="card">
-        <h3>Issued passes</h3>
+        <div className="page-header-row">
+          <h3>Issued passes</h3>
+
+          <button type="button" className="btn" onClick={exportCsv}>
+            Export CSV
+          </button>
+        </div>
 
         <div className="list-stack">
           {passes.length === 0 ? (
             <p>No passes found.</p>
           ) : (
-            passes.map(function (pass) {
-              return (
-                <div className="list-item" key={pass._id}>
-                  <strong>{pass.passNumber}</strong>
-                  <span>
-                    Visitor: {(pass.visitor && pass.visitor.fullName) || 'N/A'}
-                  </span>
-                  <span>Status: {pass.status || 'N/A'}</span>
-                  <span>
-                    Valid till:{' '}
-                    {pass.validTill
-                      ? new Date(pass.validTill).toLocaleString()
-                      : 'N/A'}
-                  </span>
+            passes.map((pass) => (
+              <div className="list-item" key={pass._id}>
+                <strong>{pass.passNumber}</strong>
 
-                  {pass.qrCodeDataUrl ? (
-                    <img
-                      src={pass.qrCodeDataUrl}
-                      alt={pass.passNumber}
-                      style={{ width: '140px', borderRadius: '12px' }}
-                    />
-                  ) : null}
+                <span>
+                  Visitor: {pass.visitor?.fullName || 'N/A'}
+                </span>
 
-                  {pass.pdfPath ? (
-                    <a
-                      href={`http://localhost:5000${pass.pdfPath}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open PDF pass
-                    </a>
-                  ) : null}
-                </div>
-              );
-            })
+                <span>
+                  Status: {pass.status || 'N/A'}
+                </span>
+
+                <span>
+                  Valid till:{' '}
+                  {pass.validTill
+                    ? new Date(pass.validTill).toLocaleString()
+                    : 'N/A'}
+                </span>
+
+                {pass.qrCodeDataUrl ? (
+                  <img
+                    src={pass.qrCodeDataUrl}
+                    alt={pass.passNumber}
+                    className="pass-qr-image"
+                  />
+                ) : null}
+
+                {pass.pdfPath ? (
+                  <a
+                    href={getFileUrl(pass.pdfPath)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open PDF pass
+                  </a>
+                ) : null}
+              </div>
+            ))
           )}
         </div>
       </div>

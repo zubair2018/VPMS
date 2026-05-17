@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import axios from 'axios';
+import './VisitorPassLookupPage.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
 
 function VisitorPassLookupPage() {
   const [email, setEmail] = useState('');
@@ -9,76 +11,116 @@ function VisitorPassLookupPage() {
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const resetMessages = () => {
     setError('');
     setResult(null);
+  };
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      setError('Please enter your email');
+      setResult(null);
+      return;
+    }
 
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/visitors/public/pass`, {
-        params: { email }
+      setLoading(true);
+      resetMessages();
+
+      const response = await axios.get(`${API_BASE_URL}/visitors/public/pass`, {
+        params: { email: trimmedEmail },
       });
-      setResult(data);
+
+      setResult(response.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Pass not found');
+      setResult(null);
+      setError(err?.response?.data?.message || 'Pass not found');
     } finally {
       setLoading(false);
     }
   };
 
+  const getPdfUrl = () => {
+    if (!result?.pass?.pdfPath) {
+      return '';
+    }
+
+    return `${API_BASE_URL.replace('/api', '')}${result.pass.pdfPath}`;
+  };
+
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.card}>
-        <h1 style={styles.heading}>View Digital Pass</h1>
-        <p style={styles.subtext}>
+    <div className="pass-lookup-page">
+      <div className="pass-lookup-card">
+        <h1 className="pass-lookup-title">View Digital Pass</h1>
+
+        <p className="pass-lookup-subtext">
           Enter your email to check whether your visitor pass has been issued.
         </p>
 
-        <form onSubmit={handleSearch} style={styles.form}>
+        <form onSubmit={handleSearch} className="pass-lookup-form">
           <input
             type="email"
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={styles.input}
+            className="pass-lookup-input"
             required
           />
-          <button type="submit" style={styles.button} disabled={loading}>
+
+          <button
+            type="submit"
+            className="pass-lookup-button"
+            disabled={loading}
+          >
             {loading ? 'Checking...' : 'Check Pass'}
           </button>
         </form>
 
-        {error ? <p style={styles.error}>{error}</p> : null}
+        {error ? <p className="pass-lookup-error">{error}</p> : null}
 
         {result ? (
-          <div style={styles.resultBox}>
-            <h2 style={styles.resultHeading}>Pass Found</h2>
-            <p><strong>Name:</strong> {result.visitor.fullName}</p>
-            <p><strong>Email:</strong> {result.visitor.email}</p>
-            <p><strong>Phone:</strong> {result.visitor.phone}</p>
-            <p><strong>Purpose:</strong> {result.visitor.purpose}</p>
-            <p><strong>Pass Number:</strong> {result.pass.passNumber}</p>
-            <p><strong>Status:</strong> {result.pass.status}</p>
-            <p><strong>Valid From:</strong> {new Date(result.pass.validFrom).toLocaleString()}</p>
-            <p><strong>Valid Till:</strong> {new Date(result.pass.validTill).toLocaleString()}</p>
+          <div className="pass-lookup-result">
+            <h2 className="pass-lookup-result-title">Pass Found</h2>
 
-            {result.pass.qrCodeDataUrl ? (
-              <div style={styles.qrBox}>
+            <p><strong>Name:</strong> {result.visitor?.fullName || 'N/A'}</p>
+            <p><strong>Email:</strong> {result.visitor?.email || 'N/A'}</p>
+            <p><strong>Phone:</strong> {result.visitor?.phone || 'N/A'}</p>
+            <p><strong>Purpose:</strong> {result.visitor?.purpose || 'N/A'}</p>
+            <p><strong>Pass Number:</strong> {result.pass?.passNumber || 'N/A'}</p>
+            <p><strong>Status:</strong> {result.pass?.status || 'N/A'}</p>
+            <p>
+              <strong>Valid From:</strong>{' '}
+              {result.pass?.validFrom
+                ? new Date(result.pass.validFrom).toLocaleString()
+                : 'N/A'}
+            </p>
+            <p>
+              <strong>Valid Till:</strong>{' '}
+              {result.pass?.validTill
+                ? new Date(result.pass.validTill).toLocaleString()
+                : 'N/A'}
+            </p>
+
+            {result.pass?.qrCodeDataUrl ? (
+              <div className="pass-lookup-qr-box">
                 <img
                   src={result.pass.qrCodeDataUrl}
                   alt="Visitor QR Code"
-                  style={styles.qrImage}
+                  className="pass-lookup-qr-image"
                 />
               </div>
             ) : null}
 
-            {result.pass.pdfPath ? (
+            {result.pass?.pdfPath ? (
               <a
-                href={`${API_BASE_URL.replace('/api', '')}${result.pass.pdfPath}`}
+                href={getPdfUrl()}
                 target="_blank"
                 rel="noreferrer"
-                style={styles.link}
+                className="pass-lookup-link"
               >
                 Open PDF Pass
               </a>
@@ -89,79 +131,5 @@ function VisitorPassLookupPage() {
     </div>
   );
 }
-
-const styles = {
-  wrapper: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#f4f7fb',
-    padding: '24px'
-  },
-  card: {
-    width: '100%',
-    maxWidth: '560px',
-    background: '#fff',
-    padding: '24px',
-    borderRadius: '12px',
-    boxShadow: '0 10px 30px rgba(0,0,0,0.08)'
-  },
-  heading: {
-    marginBottom: '8px'
-  },
-  subtext: {
-    marginBottom: '20px',
-    color: '#555'
-  },
-  form: {
-    display: 'grid',
-    gap: '12px'
-  },
-  input: {
-    padding: '12px',
-    borderRadius: '8px',
-    border: '1px solid #ccc',
-    fontSize: '14px'
-  },
-  button: {
-    padding: '12px',
-    borderRadius: '8px',
-    border: 'none',
-    background: '#198754',
-    color: '#fff',
-    fontWeight: '600',
-    cursor: 'pointer'
-  },
-  error: {
-    marginTop: '16px',
-    color: 'crimson'
-  },
-  resultBox: {
-    marginTop: '20px',
-    padding: '16px',
-    border: '1px solid #ddd',
-    borderRadius: '10px',
-    background: '#fafafa'
-  },
-  resultHeading: {
-    marginBottom: '12px'
-  },
-  qrBox: {
-    marginTop: '16px'
-  },
-  qrImage: {
-    width: '180px',
-    height: '180px',
-    objectFit: 'contain'
-  },
-  link: {
-    display: 'inline-block',
-    marginTop: '16px',
-    color: '#0f62fe',
-    fontWeight: '600',
-    textDecoration: 'none'
-  }
-};
 
 export default VisitorPassLookupPage;

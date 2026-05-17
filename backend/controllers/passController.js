@@ -6,6 +6,7 @@ const Visitor = require('../models/Visitor');
 const CheckLog = require('../models/CheckLog');
 const generatePassAssets = require('../utils/generatePassAssets');
 const sendSms = require('../utils/sendSms');
+const sendEmail = require('../utils/sendEmail');
 
 const createPass = async (req, res) => {
   try {
@@ -13,7 +14,7 @@ const createPass = async (req, res) => {
 
     if (!visitorId || !validFrom || !validTill) {
       return res.status(400).json({
-        message: 'Visitor, valid from, and valid till are required'
+        message: 'visitorId, validFrom and validTill are required',
       });
     }
 
@@ -23,8 +24,10 @@ const createPass = async (req, res) => {
     }
 
     let appointment = null;
+
     if (appointmentId) {
       appointment = await Appointment.findById(appointmentId);
+
       if (!appointment) {
         return res.status(404).json({ message: 'Appointment not found' });
       }
@@ -36,44 +39,68 @@ const createPass = async (req, res) => {
       passNumber,
       visitorName: visitor.fullName,
       purpose: visitor.purpose,
-      validTill
+      validTill,
     });
 
     const pass = await Pass.create({
-      visitor: visitorId,
-      appointment: appointmentId || null,
+      visitor: visitor._id,
+      appointment: appointment ? appointment._id : null,
       issuedBy: req.user._id,
       passNumber,
       qrCodeDataUrl,
       validFrom,
       validTill,
-      pdfPath
+      pdfPath,
     });
-
-    // Fire-and-forget SMS to visitor
-    if (visitor.phone) {
-      const smsText = `Your visitor pass is generated.
-Pass: ${passNumber}
-Valid: ${new Date(validFrom).toLocaleString()} - ${new Date(
-        validTill
-      ).toLocaleString()}`;
-
-      // Do not await here so API response is not delayed by SMS
-      sendSms(visitor.phone, smsText);
-    }
 
     const populatedPass = await Pass.findById(pass._id)
       .populate('visitor')
       .populate('appointment')
       .populate('issuedBy', 'name role');
 
-    res.status(201).json(populatedPass);
+    // SMS is sent in the background so the API does not feel slow to the user.
+    // Even if SMS fails, the pass is already created and should still be usable.
+    if (visitor.phone) {
+      const smsText = `Your visitor pass is generated.
+Pass: ${passNumber}
+Valid: ${new Date(validFrom).toLocaleString()} - ${new Date(validTill).toLocaleString()}`;
+
+      sendSms(visitor.phone, smsText).catch((err) => {
+        console.error('SMS send failed:', err.message);
+      });
+    }
+
+    // Email is useful because we can share pass details and the PDF link more clearly.
+    if (visitor.email) {
+      const subject = `Visitor Pass Generated - ${passNumber}`;
+
+      const text = `Hello ${visitor.fullName},
+
+Your visitor pass has been generated successfully.
+
+Pass Number: ${passNumber}
+Purpose: ${visitor.purpose || 'N/A'}
+Valid From: ${new Date(validFrom).toLocaleString()}
+Valid Till: ${new Date(validTill).toLocaleString()}
+
+Please keep this pass with you during your visit.`;
+
+      await sendEmail({
+        to: visitor.email,
+        subject,
+        text,
+      });
+    }
+
+    return res.status(201).json(populatedPass);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({
+      message: error.message || 'Failed to create pass',
+    });
   }
 };
 
-const getPasses = async (_req, res) => {
+const getPasses = async (req, res) => {
   try {
     const passes = await Pass.find()
       .populate('visitor')
@@ -81,44 +108,66 @@ const getPasses = async (_req, res) => {
       .populate('issuedBy', 'name role')
       .sort({ createdAt: -1 });
 
-    res.json(passes);
+    return res.json(passes);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({
+      message: error.message || 'Failed to fetch passes',
+    });
   }
 };
 
 const scanPass = async (req, res) => {
   try {
-    const pass = await Pass.findOne({
-      passNumber: req.body.passNumber
-    }).populate('visitor');
+    const { passNumber } = req.body;
+
+    if (!passNumber) {
+      return res.status(400).json({ message: 'Pass number is required' });
+    }
+
+    const pass = await Pass.findOne({ passNumber }).populate('visitor');
 
     if (!pass) {
       return res.status(404).json({ message: 'Pass not found' });
     }
 
-    const nextAction = pass.status === 'issued' ? 'check-in' : 'check-out';
-    pass.status = nextAction === 'check-in' ? 'checked-in' : 'checked-out';
+    let action = '';
+    let nextStatus = '';
+
+    if (pass.status === 'issued') {
+      action = 'check-in';
+      nextStatus = 'checked-in';
+    } else if (pass.status === 'checked-in') {
+      action = 'check-out';
+      nextStatus = 'checked-out';
+    } else {
+      return res.status(400).json({
+        message: `Pass cannot be scanned when status is ${pass.status}`,
+      });
+    }
+
+    pass.status = nextStatus;
     await pass.save();
 
     const log = await CheckLog.create({
       pass: pass._id,
-      action: nextAction,
-      scannedBy: req.user._id
+      action,
+      scannedBy: req.user._id,
     });
 
-    res.json({
-      message: `Pass ${nextAction} recorded`,
+    return res.json({
+      message: `Pass ${action} recorded`,
       pass,
-      log
+      log,
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({
+      message: error.message || 'Failed to scan pass',
+    });
   }
 };
 
 module.exports = {
   createPass,
   getPasses,
-  scanPass
+  scanPass,
 };
