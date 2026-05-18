@@ -3,30 +3,50 @@ import api from '../api/axios';
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('visitor-pass-auth');
-    return saved ? JSON.parse(saved) : null;
-  });
+const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    if (user) localStorage.setItem('visitor-pass-auth', JSON.stringify(user));
-    else localStorage.removeItem('visitor-pass-auth');
-  }, [user]);
+    const savedUser = localStorage.getItem('visitor-pass-auth');
 
-  const login = async (payload) => {
-    const { data } = await api.post('/auth/login', payload);
-    setUser(data);
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  const login = async (formData) => {
+    const response = await api.post('/auth/login', formData);
+    setUser(response.data);
+    localStorage.setItem('visitor-pass-auth', JSON.stringify(response.data));
   };
 
-  const register = async (payload) => {
-    const { data } = await api.post('/auth/register', payload);
-    setUser(data);
+  const register = async (formData) => {
+    const response = await api.post('/auth/register', formData);
+    setUser(response.data);
+    localStorage.setItem('visitor-pass-auth', JSON.stringify(response.data));
   };
 
-  const logout = () => setUser(null);
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('visitor-pass-auth');
+  };
 
-  return <AuthContext.Provider value={{ user, login, register, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        register,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
-export const useAuth = () => useContext(AuthContext);
+const useAuth = () => {
+  return useContext(AuthContext);
+};
+
+export { AuthProvider, useAuth };

@@ -1,47 +1,30 @@
-// backend/utils/sendSms.js
-
 const twilio = require('twilio');
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-// This helper sends an SMS to the given number.
-// It is used for notifications like pass creation.
-// If Twilio is not configured, we skip sending instead of crashing the app.
-async function sendSms(to, body) {
-  if (!to || !body) {
-    console.warn('SMS skipped: phone number or message body is missing');
-    return { success: false, message: 'Missing phone number or message body' };
-  }
-
-  if (!accountSid || !authToken || !fromNumber) {
-    console.warn('SMS skipped: Twilio environment variables are not configured');
-    return { success: false, message: 'Twilio not configured' };
-  }
-
+const sendSms = async (to, body) => {
   try {
-    const client = twilio(accountSid, authToken);
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+      console.log('Twilio config missing');
+      return;
+    }
 
-    const response = await client.messages.create({
-      from: fromNumber,
+    if (!to || !body) {
+      console.log('Phone number or message missing');
+      return;
+    }
+
+    const client = twilio(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
+    );
+
+    await client.messages.create({
+      from: process.env.TWILIO_PHONE_NUMBER,
       to,
       body,
     });
-
-    return {
-      success: true,
-      sid: response.sid,
-      message: 'SMS sent successfully',
-    };
   } catch (error) {
-    console.error('Failed to send SMS:', error.message || error);
-
-    return {
-      success: false,
-      message: error.message || 'SMS sending failed',
-    };
+    console.log('SMS not sent');
   }
-}
+};
 
 module.exports = sendSms;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../../api/axios';
 
 const initialForm = {
@@ -23,8 +23,8 @@ const VisitorsPage = () => {
   const loadVisitors = async () => {
     try {
       setError('');
-      const res = await api.get('/visitors');
-      setVisitors(Array.isArray(res.data) ? res.data : []);
+      const response = await api.get('/visitors');
+      setVisitors(response.data || []);
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load visitors');
     }
@@ -34,41 +34,11 @@ const VisitorsPage = () => {
     loadVisitors();
   }, []);
 
-  // Filter visitors from the main list instead of storing another copy in state.
-  const filteredVisitors = useMemo(() => {
-    const term = search.trim().toLowerCase();
-
-    if (!term) {
-      return visitors;
-    }
-
-    return visitors.filter((visitor) => {
-      const valuesToSearch = [
-        visitor.fullName,
-        visitor.email,
-        visitor.phone,
-        visitor.company,
-        visitor.purpose,
-      ];
-
-      return valuesToSearch.some((value) =>
-        String(value || '').toLowerCase().includes(term)
-      );
-    });
-  }, [search, visitors]);
-
   const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleFileChange = (e, setter) => {
-    const file = e.target.files?.[0] || null;
-    setter(file);
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
   };
 
   const submitHandler = async (e) => {
@@ -79,10 +49,13 @@ const VisitorsPage = () => {
       setError('');
 
       const formData = new FormData();
-
-      Object.entries(form).forEach(([key, value]) => {
-        formData.append(key, value || '');
-      });
+      formData.append('fullName', form.fullName);
+      formData.append('email', form.email);
+      formData.append('phone', form.phone);
+      formData.append('company', form.company);
+      formData.append('purpose', form.purpose);
+      formData.append('idProofType', form.idProofType);
+      formData.append('idProofNumber', form.idProofNumber);
 
       if (photo) {
         formData.append('photo', photo);
@@ -101,70 +74,72 @@ const VisitorsPage = () => {
       setForm(initialForm);
       setPhoto(null);
       setIdProof(null);
-      await loadVisitors();
+      loadVisitors();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to create visitor');
+      setError(err?.response?.data?.message || 'Failed to save visitor');
     } finally {
       setLoading(false);
     }
   };
 
-  // Build a full file URL from the API base instead of hardcoding localhost.
   const getFileUrl = (path) => {
     if (!path) {
       return '';
     }
 
-    const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
-    return `${baseUrl}${path}`;
+    const baseUrl = api.defaults.baseURL
+      ? api.defaults.baseURL.replace('/api', '')
+      : '';
+
+    return baseUrl + path;
   };
+
+  const filteredVisitors = visitors.filter((visitor) => {
+    const text =
+      (
+        (visitor.fullName || '') +
+        ' ' +
+        (visitor.email || '') +
+        ' ' +
+        (visitor.phone || '') +
+        ' ' +
+        (visitor.company || '') +
+        ' ' +
+        (visitor.purpose || '')
+      ).toLowerCase();
+
+    return text.includes(search.toLowerCase());
+  });
 
   const exportCsv = () => {
     if (filteredVisitors.length === 0) {
-      alert('No visitor data to export');
+      alert('No visitors to export');
       return;
     }
 
-    const headers = [
-      'Full Name',
-      'Email',
-      'Phone',
-      'Company',
-      'Purpose',
-      'ID Proof Type',
-      'ID Proof Number',
-      'Created At',
-    ];
+    let csv =
+      'Full Name,Email,Phone,Company,Purpose,ID Proof Type,ID Proof Number,Created At\n';
 
-    const rows = filteredVisitors.map((visitor) => [
-      visitor.fullName || '',
-      visitor.email || '',
-      visitor.phone || '',
-      visitor.company || '',
-      visitor.purpose || '',
-      visitor.idProofType || '',
-      visitor.idProofNumber || '',
-      visitor.createdAt ? new Date(visitor.createdAt).toLocaleString() : '',
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row) =>
-        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')
-      ),
-    ].join('\n');
-
-    const blob = new Blob([csvContent], {
-      type: 'text/csv;charset=utf-8;',
+    filteredVisitors.forEach((visitor) => {
+      csv +=
+        `${visitor.fullName || ''},` +
+        `${visitor.email || ''},` +
+        `${visitor.phone || ''},` +
+        `${visitor.company || ''},` +
+        `${visitor.purpose || ''},` +
+        `${visitor.idProofType || ''},` +
+        `${visitor.idProofNumber || ''},` +
+        `${visitor.createdAt ? new Date(visitor.createdAt).toLocaleString() : ''}\n`;
     });
 
+    const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
+
     link.href = url;
-    link.download = 'visitors-report.csv';
-    document.body.appendChild(link);
+    link.download = 'visitors.csv';
     link.click();
-    document.body.removeChild(link);
+
     window.URL.revokeObjectURL(url);
   };
 
@@ -174,6 +149,7 @@ const VisitorsPage = () => {
         <h3>Add visitor</h3>
 
         <input
+          type="text"
           name="fullName"
           placeholder="Full name"
           value={form.fullName}
@@ -182,8 +158,8 @@ const VisitorsPage = () => {
         />
 
         <input
-          name="email"
           type="email"
+          name="email"
           placeholder="Email"
           value={form.email}
           onChange={handleChange}
@@ -191,6 +167,7 @@ const VisitorsPage = () => {
         />
 
         <input
+          type="text"
           name="phone"
           placeholder="Phone"
           value={form.phone}
@@ -199,6 +176,7 @@ const VisitorsPage = () => {
         />
 
         <input
+          type="text"
           name="company"
           placeholder="Company"
           value={form.company}
@@ -206,6 +184,7 @@ const VisitorsPage = () => {
         />
 
         <input
+          type="text"
           name="purpose"
           placeholder="Purpose"
           value={form.purpose}
@@ -214,6 +193,7 @@ const VisitorsPage = () => {
         />
 
         <input
+          type="text"
           name="idProofType"
           placeholder="ID proof type"
           value={form.idProofType}
@@ -221,6 +201,7 @@ const VisitorsPage = () => {
         />
 
         <input
+          type="text"
           name="idProofNumber"
           placeholder="ID proof number"
           value={form.idProofNumber}
@@ -231,14 +212,14 @@ const VisitorsPage = () => {
         <input
           type="file"
           accept="image/*"
-          onChange={(e) => handleFileChange(e, setPhoto)}
+          onChange={(e) => setPhoto(e.target.files[0])}
         />
 
         <label>ID proof image</label>
         <input
           type="file"
           accept="image/*"
-          onChange={(e) => handleFileChange(e, setIdProof)}
+          onChange={(e) => setIdProof(e.target.files[0])}
         />
 
         {error ? <p className="error-text">{error}</p> : null}
@@ -255,7 +236,7 @@ const VisitorsPage = () => {
           <div className="page-actions-row">
             <input
               type="text"
-              placeholder="Search by name, email, phone"
+              placeholder="Search visitor"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

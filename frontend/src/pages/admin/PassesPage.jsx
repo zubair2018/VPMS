@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../../api/axios';
 
 const PassesPage = () => {
@@ -16,17 +16,15 @@ const PassesPage = () => {
     try {
       setError('');
 
-      const [passesRes, visitorsRes, appointmentsRes] = await Promise.all([
-        api.get('/passes'),
-        api.get('/visitors'),
-        api.get('/appointments'),
-      ]);
+      const passesRes = await api.get('/passes');
+      const visitorsRes = await api.get('/visitors');
+      const appointmentsRes = await api.get('/appointments');
 
-      setPasses(Array.isArray(passesRes.data) ? passesRes.data : []);
-      setVisitors(Array.isArray(visitorsRes.data) ? visitorsRes.data : []);
-      setAppointments(Array.isArray(appointmentsRes.data) ? appointmentsRes.data : []);
+      setPasses(passesRes.data || []);
+      setVisitors(visitorsRes.data || []);
+      setAppointments(appointmentsRes.data || []);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to load passes data');
+      setError(err?.response?.data?.message || 'Failed to load data');
     }
   };
 
@@ -34,24 +32,21 @@ const PassesPage = () => {
     loadData();
   }, []);
 
-  const approvedAppointments = useMemo(() => {
-    return appointments.filter((item) => item.status === 'approved');
-  }, [appointments]);
-
   const getFileUrl = (path) => {
-    if (!path) {
-      return '';
-    }
+    if (!path) return '';
 
-    const baseUrl = api.defaults.baseURL?.replace('/api', '') || '';
-    return `${baseUrl}${path}`;
+    const baseUrl = api.defaults.baseURL
+      ? api.defaults.baseURL.replace('/api', '')
+      : '';
+
+    return baseUrl + path;
   };
 
   const submitHandler = async (e) => {
     e.preventDefault();
 
     if (!visitorId || !validFrom || !validTill) {
-      setError('Please select visitor, valid from, and valid till.');
+      setError('Please fill all required fields');
       return;
     }
 
@@ -60,10 +55,10 @@ const PassesPage = () => {
       setError('');
 
       await api.post('/passes', {
-        visitorId,
-        appointmentId,
-        validFrom,
-        validTill,
+        visitorId: visitorId,
+        appointmentId: appointmentId,
+        validFrom: validFrom,
+        validTill: validTill,
       });
 
       setVisitorId('');
@@ -71,7 +66,7 @@ const PassesPage = () => {
       setValidFrom('');
       setValidTill('');
 
-      await loadData();
+      loadData();
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to generate pass');
     } finally {
@@ -81,66 +76,48 @@ const PassesPage = () => {
 
   const exportCsv = () => {
     if (passes.length === 0) {
-      alert('No pass data to export');
+      alert('No passes to export');
       return;
     }
 
-    const headers = [
-      'Pass Number',
-      'Visitor Name',
-      'Visitor Email',
-      'Status',
-      'Valid From',
-      'Valid Till',
-      'Appointment Host',
-      'Issued By',
-      'Created At',
-    ];
+    let csv =
+      'Pass Number,Visitor Name,Visitor Email,Status,Valid From,Valid Till,Appointment Host,Issued By,Created At\n';
 
-    const rows = passes.map((pass) => [
-      pass.passNumber || '',
-      pass.visitor?.fullName || '',
-      pass.visitor?.email || '',
-      pass.status || '',
-      pass.validFrom ? new Date(pass.validFrom).toLocaleString() : '',
-      pass.validTill ? new Date(pass.validTill).toLocaleString() : '',
-      pass.appointment?.host?.name || '',
-      pass.issuedBy?.name || '',
-      pass.createdAt ? new Date(pass.createdAt).toLocaleString() : '',
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row) =>
-        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')
-      ),
-    ].join('\n');
-
-    const blob = new Blob([csvContent], {
-      type: 'text/csv;charset=utf-8;',
+    passes.forEach((pass) => {
+      csv +=
+        `${pass.passNumber || ''},` +
+        `${pass.visitor?.fullName || ''},` +
+        `${pass.visitor?.email || ''},` +
+        `${pass.status || ''},` +
+        `${pass.validFrom ? new Date(pass.validFrom).toLocaleString() : ''},` +
+        `${pass.validTill ? new Date(pass.validTill).toLocaleString() : ''},` +
+        `${pass.appointment?.host?.name || ''},` +
+        `${pass.issuedBy?.name || ''},` +
+        `${pass.createdAt ? new Date(pass.createdAt).toLocaleString() : ''}\n`;
     });
 
+    const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
+
     link.href = url;
-    link.download = 'passes-report.csv';
-    document.body.appendChild(link);
+    link.download = 'passes.csv';
     link.click();
-    document.body.removeChild(link);
+
     window.URL.revokeObjectURL(url);
   };
+
+  const approvedAppointments = appointments.filter(
+    (item) => item.status === 'approved'
+  );
 
   return (
     <div className="grid two">
       <form className="card form-card" onSubmit={submitHandler}>
         <h3>Issue pass</h3>
 
-        <label htmlFor="visitorId">Visitor</label>
-        <select
-          id="visitorId"
-          value={visitorId}
-          onChange={(e) => setVisitorId(e.target.value)}
-        >
+        <label>Visitor</label>
+        <select value={visitorId} onChange={(e) => setVisitorId(e.target.value)}>
           <option value="">Select visitor</option>
           {visitors.map((visitor) => (
             <option key={visitor._id} value={visitor._id}>
@@ -149,31 +126,29 @@ const PassesPage = () => {
           ))}
         </select>
 
-        <label htmlFor="appointmentId">Approved appointment (optional)</label>
+        <label>Approved appointment (optional)</label>
         <select
-          id="appointmentId"
           value={appointmentId}
           onChange={(e) => setAppointmentId(e.target.value)}
         >
           <option value="">Select approved appointment</option>
           {approvedAppointments.map((item) => (
             <option key={item._id} value={item._id}>
-              {item.visitor?.fullName || 'Visitor'} - {item.host?.name || 'Host'}
+              {(item.visitor && item.visitor.fullName) || 'Visitor'} -{' '}
+              {(item.host && item.host.name) || 'Host'}
             </option>
           ))}
         </select>
 
-        <label htmlFor="validFrom">Valid from</label>
+        <label>Valid from</label>
         <input
-          id="validFrom"
           type="datetime-local"
           value={validFrom}
           onChange={(e) => setValidFrom(e.target.value)}
         />
 
-        <label htmlFor="validTill">Valid till</label>
+        <label>Valid till</label>
         <input
-          id="validTill"
           type="datetime-local"
           value={validTill}
           onChange={(e) => setValidTill(e.target.value)}
@@ -189,7 +164,6 @@ const PassesPage = () => {
       <div className="card">
         <div className="page-header-row">
           <h3>Issued passes</h3>
-
           <button type="button" className="btn" onClick={exportCsv}>
             Export CSV
           </button>
@@ -203,14 +177,8 @@ const PassesPage = () => {
               <div className="list-item" key={pass._id}>
                 <strong>{pass.passNumber}</strong>
 
-                <span>
-                  Visitor: {pass.visitor?.fullName || 'N/A'}
-                </span>
-
-                <span>
-                  Status: {pass.status || 'N/A'}
-                </span>
-
+                <span>Visitor: {pass.visitor?.fullName || 'N/A'}</span>
+                <span>Status: {pass.status || 'N/A'}</span>
                 <span>
                   Valid till:{' '}
                   {pass.validTill
@@ -221,7 +189,7 @@ const PassesPage = () => {
                 {pass.qrCodeDataUrl ? (
                   <img
                     src={pass.qrCodeDataUrl}
-                    alt={pass.passNumber}
+                    alt="QR Code"
                     className="pass-qr-image"
                   />
                 ) : null}
