@@ -1,38 +1,46 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axios';
+
+const initialForm = {
+  visitor: '',
+  host: '',
+  visitDate: '',
+  notes: '',
+};
 
 const AppointmentsPage = () => {
   const [appointments, setAppointments] = useState([]);
   const [visitors, setVisitors] = useState([]);
   const [employees, setEmployees] = useState([]);
 
-  const [visitor, setVisitor] = useState('');
-  const [host, setHost] = useState('');
-  const [visitDate, setVisitDate] = useState('');
-  const [notes, setNotes] = useState('');
+  const [form, setForm] = useState(initialForm);
 
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [statusLoadingId, setStatusLoadingId] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const loadData = async () => {
     try {
+      setPageLoading(true);
       setError('');
 
-      const appointmentsRes = await api.get('/appointments');
-      const visitorsRes = await api.get('/visitors');
-      const employeesRes = await api.get('/users?role=employee');
+      const [appointmentsRes, visitorsRes, employeesRes] = await Promise.all([
+        api.get('/appointments'),
+        api.get('/visitors'),
+        api.get('/users?role=employee'),
+      ]);
 
       setAppointments(Array.isArray(appointmentsRes.data) ? appointmentsRes.data : []);
       setVisitors(Array.isArray(visitorsRes.data) ? visitorsRes.data : []);
       setEmployees(Array.isArray(employeesRes.data) ? employeesRes.data : []);
     } catch (err) {
       setError(
-        (err &&
-          err.response &&
-          err.response.data &&
-          err.response.data.message) ||
-          'Failed to load appointments data'
+        err?.response?.data?.message || 'Failed to load appointments data'
       );
+    } finally {
+      setPageLoading(false);
     }
   };
 
@@ -40,39 +48,42 @@ const AppointmentsPage = () => {
     loadData();
   }, []);
 
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+
+    if (error) setError('');
+    if (success) setSuccess('');
+  };
+
   const submitHandler = async (e) => {
     e.preventDefault();
 
-    if (!visitor || !host || !visitDate) {
+    if (!form.visitor || !form.host || !form.visitDate) {
       setError('Please select visitor, host, and visit date.');
+      setSuccess('');
       return;
     }
 
     try {
       setLoading(true);
       setError('');
+      setSuccess('');
 
       await api.post('/appointments', {
-        visitor: visitor,
-        host: host,
-        visitDate: visitDate,
-        notes: notes
+        visitor: form.visitor,
+        host: form.host,
+        visitDate: form.visitDate,
+        notes: form.notes,
       });
 
-      setVisitor('');
-      setHost('');
-      setVisitDate('');
-      setNotes('');
-
+      setForm(initialForm);
+      setSuccess('Appointment created successfully.');
       await loadData();
     } catch (err) {
       setError(
-        (err &&
-          err.response &&
-          err.response.data &&
-          err.response.data.message) ||
-          'Failed to create appointment'
+        err?.response?.data?.message || 'Failed to create appointment'
       );
+      setSuccess('');
     } finally {
       setLoading(false);
     }
@@ -80,74 +91,98 @@ const AppointmentsPage = () => {
 
   const changeStatus = async (id, status) => {
     try {
+      setStatusLoadingId(id);
       setError('');
-      await api.put('/appointments/' + id + '/status', { status: status });
+      setSuccess('');
+
+      await api.put(`/appointments/${id}/status`, { status });
+      setSuccess(`Appointment ${status} successfully.`);
       await loadData();
     } catch (err) {
       setError(
-        (err &&
-          err.response &&
-          err.response.data &&
-          err.response.data.message) ||
-          'Failed to update status'
+        err?.response?.data?.message || 'Failed to update status'
       );
+    } finally {
+      setStatusLoadingId('');
     }
+  };
+
+  const sortedAppointments = useMemo(() => {
+    return [...appointments].sort((a, b) => {
+      const first = a?.visitDate ? new Date(a.visitDate).getTime() : 0;
+      const second = b?.visitDate ? new Date(b.visitDate).getTime() : 0;
+      return second - first;
+    });
+  }, [appointments]);
+
+  const getStatusClass = (status) => {
+    const value = String(status || 'pending').toLowerCase();
+
+    if (value === 'approved') return 'status-badge approved';
+    if (value === 'rejected') return 'status-badge rejected';
+    return 'status-badge pending';
   };
 
   return (
     <div className="grid two">
       <form className="card form-card" onSubmit={submitHandler}>
-        <h3>Create appointment</h3>
+        <div className="section-head">
+          <div>
+            <h3>Create appointment</h3>
+            <p>Schedule a visitor meeting with an employee host.</p>
+          </div>
+        </div>
 
         <label htmlFor="visitor">Visitor</label>
         <select
           id="visitor"
-          value={visitor}
-          onChange={(e) => setVisitor(e.target.value)}
+          name="visitor"
+          value={form.visitor}
+          onChange={handleChange}
         >
           <option value="">Select visitor</option>
-          {visitors.map(function (item) {
-            return (
-              <option key={item._id} value={item._id}>
-                {item.fullName} - {item.email}
-              </option>
-            );
-          })}
+          {visitors.map((item) => (
+            <option key={item._id} value={item._id}>
+              {item.fullName} - {item.email}
+            </option>
+          ))}
         </select>
 
         <label htmlFor="host">Host employee</label>
         <select
           id="host"
-          value={host}
-          onChange={(e) => setHost(e.target.value)}
+          name="host"
+          value={form.host}
+          onChange={handleChange}
         >
           <option value="">Select employee host</option>
-          {employees.map(function (employee) {
-            return (
-              <option key={employee._id} value={employee._id}>
-                {employee.name} - {employee.email}
-              </option>
-            );
-          })}
+          {employees.map((employee) => (
+            <option key={employee._id} value={employee._id}>
+              {employee.name} - {employee.email}
+            </option>
+          ))}
         </select>
 
         <label htmlFor="visitDate">Visit date and time</label>
         <input
           id="visitDate"
+          name="visitDate"
           type="datetime-local"
-          value={visitDate}
-          onChange={(e) => setVisitDate(e.target.value)}
+          value={form.visitDate}
+          onChange={handleChange}
         />
 
         <label htmlFor="notes">Notes</label>
         <textarea
           id="notes"
+          name="notes"
           placeholder="Purpose details, floor, department, or special instructions"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          value={form.notes}
+          onChange={handleChange}
         />
 
-        {error ? <p className="error-text">{error}</p> : null}
+        {error && <div className="auth-error-box" role="alert">{error}</div>}
+        {success && <div className="success-box">{success}</div>}
 
         <button className="btn" disabled={loading}>
           {loading ? 'Creating...' : 'Create appointment'}
@@ -155,58 +190,83 @@ const AppointmentsPage = () => {
       </form>
 
       <div className="card">
-        <h3>Appointments</h3>
+        <div className="section-head">
+          <div>
+            <h3>Appointments</h3>
+            <p>Review visitor meetings and update approval status.</p>
+          </div>
+        </div>
 
-        <div className="list-stack">
-          {appointments.length === 0 ? (
-            <p>No appointments found.</p>
-          ) : (
-            appointments.map(function (item) {
+        {pageLoading ? (
+          <p className="muted-text">Loading appointments...</p>
+        ) : sortedAppointments.length === 0 ? (
+          <div className="empty-state-box">
+            <h4>No appointments found</h4>
+            <p>Create a new appointment using the form on the left.</p>
+          </div>
+        ) : (
+          <div className="list-stack">
+            {sortedAppointments.map((item) => {
+              const currentStatus = String(item.status || 'pending').toLowerCase();
+
               return (
-                <div className="list-item" key={item._id}>
-                  <strong>
-                    {(item.visitor && item.visitor.fullName) || 'Unknown visitor'}
-                  </strong>
+                <div className="list-item appointment-item" key={item._id}>
+                  <div className="appointment-head">
+                    <div>
+                      <strong>
+                        {(item.visitor && item.visitor.fullName) || 'Unknown visitor'}
+                      </strong>
+                      <p className="muted-text">
+                        Host: {(item.host && item.host.name) || 'Unknown employee'}
+                      </p>
+                    </div>
 
-                  <span>
-                    Host: {(item.host && item.host.name) || 'Unknown employee'}
-                  </span>
-
-                  <span>
-                    Email: {(item.host && item.host.email) || 'N/A'}
-                  </span>
-
-                  <span>
-                    Visit:{' '}
-                    {item.visitDate
-                      ? new Date(item.visitDate).toLocaleString()
-                      : 'N/A'}
-                  </span>
-
-                  <span className="badge">{item.status || 'pending'}</span>
-
-                  <div className="action-row">
-                    <button
-                      type="button"
-                      className="btn small"
-                      onClick={() => changeStatus(item._id, 'approved')}
-                    >
-                      Approve
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn secondary small"
-                      onClick={() => changeStatus(item._id, 'rejected')}
-                    >
-                      Reject
-                    </button>
+                    <span className={getStatusClass(currentStatus)}>
+                      {currentStatus}
+                    </span>
                   </div>
+
+                  <div className="visitor-meta-grid">
+                    <span>
+                      <strong>Host email:</strong> {(item.host && item.host.email) || 'N/A'}
+                    </span>
+                    <span>
+                      <strong>Visit:</strong>{' '}
+                      {item.visitDate
+                        ? new Date(item.visitDate).toLocaleString()
+                        : 'N/A'}
+                    </span>
+                    <span>
+                      <strong>Notes:</strong> {item.notes || 'No notes'}
+                    </span>
+                  </div>
+
+                  {currentStatus === 'pending' && (
+                    <div className="action-row">
+                      <button
+                        type="button"
+                        className="btn small"
+                        disabled={statusLoadingId === item._id}
+                        onClick={() => changeStatus(item._id, 'approved')}
+                      >
+                        {statusLoadingId === item._id ? 'Updating...' : 'Approve'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn secondary small"
+                        disabled={statusLoadingId === item._id}
+                        onClick={() => changeStatus(item._id, 'rejected')}
+                      >
+                        {statusLoadingId === item._id ? 'Updating...' : 'Reject'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

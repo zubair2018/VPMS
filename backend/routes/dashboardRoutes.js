@@ -1,8 +1,13 @@
 const express = require('express');
-const { getStats } = require('../controllers/dashboardController');
+const router = express.Router();
+
+// Import middleware
 const { protect } = require('../middleware/authMiddleware');
 
-const router = express.Router();
-router.get('/stats', protect, getStats);
+// Import controller
+const { getDashboardStats } = require('../controllers/dashboardController');
+
+// Route to get dashboard stats
+router.get('/stats', protect, getDashboardStats);
 
 module.exports = router;

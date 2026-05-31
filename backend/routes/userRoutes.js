@@ -1,9 +1,14 @@
 const express = require('express');
-const { getUsers } = require('../controllers/userController');
-const { protect, authorize } = require('../middleware/authMiddleware');
+const { protect, authorizeRolesRoles } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-router.get('/', protect, authorize('admin', 'security', 'employee'), getUsers);
+router.get('/me', protect, (req, res) => {
+  res.json(req.user);
+});
+
+router.get('/admin-only', protect, authorizeRolesRoles('admin'), (req, res) => {
+  res.json({ message: 'Welcome admin' });
+});
 
 module.exports = router;

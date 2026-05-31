@@ -1,9 +1,9 @@
 const express = require('express');
 const { createAppointment, getAppointments, updateAppointmentStatus } = require('../controllers/appointmentController');
-const { protect, authorize } = require('../middleware/authMiddleware');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
 const router = express.Router();
-router.route('/').get(protect, getAppointments).post(protect, authorize('admin', 'employee'), createAppointment);
-router.put('/:id/status', protect, authorize('admin', 'employee'), updateAppointmentStatus);
+router.route('/').get(protect, getAppointments).post(protect, authorizeRoles('admin', 'employee'), createAppointment);
+router.put('/:id/status', protect, authorizeRoles('admin', 'employee'), updateAppointmentStatus);
 
 module.exports = router;

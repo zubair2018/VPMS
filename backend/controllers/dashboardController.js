@@ -1,22 +1,63 @@
+// Import models
 const Visitor = require('../models/Visitor');
-const Appointment = require('../models/Appointment');
 const Pass = require('../models/Pass');
-const CheckLog = require('../models/CheckLog');
 
-const getStats = async (_req, res) => {
+// Controller function to get all dashboard data
+const getDashboardStats = async (req, res) => {
   try {
-    const [visitors, appointments, issuedPasses, checkedIns, logs] = await Promise.all([
+    // Run all queries together for faster response
+    const [
+      totalVisitors,
+      totalPasses,
+      checkedInPasses,
+      checkedOutPasses,
+      issuedPasses,
+      expiredPasses,
+      recentVisitors,
+      recentPasses,
+    ] = await Promise.all([
       Visitor.countDocuments(),
-      Appointment.countDocuments(),
       Pass.countDocuments(),
       Pass.countDocuments({ status: 'checked-in' }),
-      CheckLog.find().populate({ path: 'pass', populate: { path: 'visitor' } }).sort({ createdAt: -1 }).limit(10)
+      Pass.countDocuments({ status: 'checked-out' }),
+      Pass.countDocuments({ status: 'issued' }),
+      Pass.countDocuments({ status: 'expired' }),
+
+      // Get latest 5 visitors
+      Visitor.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
+
+      // Get latest 5 passes with visitor details
+      Pass.find()
+        .populate('visitor', 'fullName email phone')
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
     ]);
 
-    res.json({ visitors, appointments, issuedPasses, checkedIns, recentLogs: logs });
+    // Send response to frontend
+    return res.status(200).json({
+      totalVisitors,
+      totalPasses,
+      checkedInPasses,
+      checkedOutPasses,
+      issuedPasses,
+      expiredPasses,
+      recentVisitors,
+      recentPasses,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('DASHBOARD ERROR:', error.message);
+
+    return res.status(500).json({
+      message: 'Could not load dashboard stats',
+      error: error.message,
+    });
   }
 };
 
-module.exports = { getStats };
+module.exports = {
+  getDashboardStats,
+};

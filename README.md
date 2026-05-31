@@ -38,10 +38,6 @@ package.json
 - MongoDB running locally or a MongoDB Atlas URI
 - Twilio account (optional, only if SMS feature is enabled)
 
-### Installation
-
-git clone <your_repo_url>
-cd project-root
 
 # install backend
 cd backend
@@ -53,24 +49,7 @@ npm install
 
 ## Environment Variables
 
-### Backend (`backend/.env`)
 
-PORT=5000
-MONGODB_URI=mongodb://127.0.0.1:27017/visitor-pass
-JWT_SECRET=your_jwt_secret_here
-JWT_EXPIRES_IN=7d
-FILE_UPLOAD_PATH=uploads
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
-
-cannot share the .env files .
-
-### Frontend (`frontend/.env`)
-
-VITE_API_BASE_URL=http://localhost:5000
-
-## Running the Project
 
 ### Start backend
 
@@ -82,7 +61,8 @@ npm run dev
 cd frontend
 npm run dev
 
-The frontend usually runs on `http://localhost:5173` and backend on `http://localhost:5000`.
+The frontend usually runs on `http://localhost:3000` 
+and backend on `http://localhost:5000`.
 
 ## Main Modules
 
@@ -92,7 +72,7 @@ The system supports login and registration with role-based routing. Protected ro
 
 ### Visitors
 
-Admins or authorized users can create and manage visitor records, upload visitor photo and ID proof, search records, and export visitor data as CSV.
+Admins or authorizeRolesd users can create and manage visitor records, upload visitor photo and ID proof, search records, and export visitor data as CSV.
 
 ### Appointments
 
@@ -109,17 +89,6 @@ Security or admin users can record pass scans. On first scan, the pass becomes c
 ### SMS Notifications
 
 If Twilio is configured, the system sends an SMS to the visitor when a pass is generated.
-
-## Demo Test Accounts
-
-Example dummy emails you can use:
-
-- Admin: `admin@vpms.example.com`
-- Security: `security@vpms.example.com`
-- Employee: `employee@vpms.example.com`
-- Visitor: `visitor@vpms.example.com`
-
-Passwords depend on your seed data or registration flow.
 
 ## Testing Flow
 

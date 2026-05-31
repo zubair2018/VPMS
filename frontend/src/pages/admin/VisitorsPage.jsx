@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axios';
 
 const initialForm = {
@@ -13,59 +13,66 @@ const initialForm = {
 
 const VisitorsPage = () => {
   const [visitors, setVisitors] = useState([]);
-  const [search, setSearch] = useState('');
+  const [searchText, setSearchText] = useState('');
   const [form, setForm] = useState(initialForm);
   const [photo, setPhoto] = useState(null);
   const [idProof, setIdProof] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  const loadVisitors = async () => {
+  const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    fetchVisitors();
+  }, []);
+
+  const fetchVisitors = async () => {
     try {
+      setPageLoading(true);
       setError('');
-      const response = await api.get('/visitors');
-      setVisitors(response.data || []);
+      const res = await api.get('/visitors');
+      setVisitors(res.data || []);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to load visitors');
+      setError(err?.response?.data?.message || 'Could not load visitors');
+    } finally {
+      setPageLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadVisitors();
-  }, []);
-
   const handleChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value,
-    });
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (error) setError('');
+    if (success) setSuccess('');
   };
 
-  const submitHandler = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!form.fullName || !form.email || !form.phone || !form.purpose) {
+      setError('Please fill all required fields');
+      setSuccess('');
+      return;
+    }
 
     try {
       setLoading(true);
       setError('');
+      setSuccess('');
 
-      const formData = new FormData();
-      formData.append('fullName', form.fullName);
-      formData.append('email', form.email);
-      formData.append('phone', form.phone);
-      formData.append('company', form.company);
-      formData.append('purpose', form.purpose);
-      formData.append('idProofType', form.idProofType);
-      formData.append('idProofNumber', form.idProofNumber);
+      const data = new FormData();
+      data.append('fullName', form.fullName);
+      data.append('email', form.email);
+      data.append('phone', form.phone);
+      data.append('company', form.company);
+      data.append('purpose', form.purpose);
+      data.append('idProofType', form.idProofType);
+      data.append('idProofNumber', form.idProofNumber);
 
-      if (photo) {
-        formData.append('photo', photo);
-      }
+      if (photo) data.append('photo', photo);
+      if (idProof) data.append('idProof', idProof);
 
-      if (idProof) {
-        formData.append('idProof', idProof);
-      }
-
-      await api.post('/visitors', formData, {
+      await api.post('/visitors', data, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -74,155 +81,192 @@ const VisitorsPage = () => {
       setForm(initialForm);
       setPhoto(null);
       setIdProof(null);
-      loadVisitors();
+      setSuccess('Visitor saved successfully.');
+
+      fetchVisitors();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save visitor');
+      setError(err?.response?.data?.message || 'Could not save visitor');
+      setSuccess('');
     } finally {
       setLoading(false);
     }
   };
 
-  const getFileUrl = (path) => {
-    if (!path) {
-      return '';
-    }
+  const getFileLink = (filePath) => {
+    if (!filePath) return '';
 
-    const baseUrl = api.defaults.baseURL
+    const base = api.defaults.baseURL
       ? api.defaults.baseURL.replace('/api', '')
       : '';
 
-    return baseUrl + path;
+    return base + filePath;
   };
 
-  const filteredVisitors = visitors.filter((visitor) => {
-    const text =
-      (
-        (visitor.fullName || '') +
-        ' ' +
-        (visitor.email || '') +
-        ' ' +
-        (visitor.phone || '') +
-        ' ' +
-        (visitor.company || '') +
-        ' ' +
-        (visitor.purpose || '')
-      ).toLowerCase();
+  const filteredVisitors = useMemo(() => {
+    return visitors.filter((item) => {
+      const combinedText = `
+        ${item.fullName || ''}
+        ${item.email || ''}
+        ${item.phone || ''}
+        ${item.company || ''}
+        ${item.purpose || ''}
+      `
+        .toLowerCase()
+        .trim();
 
-    return text.includes(search.toLowerCase());
-  });
+      return combinedText.includes(searchText.toLowerCase());
+    });
+  }, [visitors, searchText]);
 
-  const exportCsv = () => {
+  const escapeCsvValue = (value) => {
+    const text = String(value ?? '');
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const handleExportCsv = () => {
     if (filteredVisitors.length === 0) {
-      alert('No visitors to export');
+      alert('No data to export');
       return;
     }
 
-    let csv =
-      'Full Name,Email,Phone,Company,Purpose,ID Proof Type,ID Proof Number,Created At\n';
+    const headers = [
+      'Full Name',
+      'Email',
+      'Phone',
+      'Company',
+      'Purpose',
+      'ID Type',
+      'ID Number',
+      'Created At',
+    ];
 
-    filteredVisitors.forEach((visitor) => {
-      csv +=
-        `${visitor.fullName || ''},` +
-        `${visitor.email || ''},` +
-        `${visitor.phone || ''},` +
-        `${visitor.company || ''},` +
-        `${visitor.purpose || ''},` +
-        `${visitor.idProofType || ''},` +
-        `${visitor.idProofNumber || ''},` +
-        `${visitor.createdAt ? new Date(visitor.createdAt).toLocaleString() : ''}\n`;
-    });
+    const rows = filteredVisitors.map((v) => [
+      v.fullName || '',
+      v.email || '',
+      v.phone || '',
+      v.company || '',
+      v.purpose || '',
+      v.idProofType || '',
+      v.idProofNumber || '',
+      v.createdAt ? new Date(v.createdAt).toLocaleString() : '',
+    ]);
 
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const csvText = [
+      headers.map(escapeCsvValue).join(','),
+      ...rows.map((row) => row.map(escapeCsvValue).join(',')),
+    ].join('\n');
 
-    link.href = url;
-    link.download = 'visitors.csv';
-    link.click();
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    const fileUrl = window.URL.createObjectURL(blob);
 
-    window.URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = fileUrl;
+    a.download = 'visitors.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    window.URL.revokeObjectURL(fileUrl);
   };
 
   return (
-    <div className="grid two">
-      <form className="card form-card" onSubmit={submitHandler}>
-        <h3>Add visitor</h3>
+    <div className="grid two visitors-page">
+      <form className="card form-card" onSubmit={handleSubmit}>
+        <div className="section-head">
+          <div>
+            <h3>Add visitor</h3>
+            <p>Enter visitor details and upload optional identity files.</p>
+          </div>
+        </div>
 
+        <label htmlFor="fullName">Full name *</label>
         <input
-          type="text"
+          id="fullName"
           name="fullName"
-          placeholder="Full name"
+          type="text"
+          placeholder="Enter full name"
           value={form.fullName}
           onChange={handleChange}
-          required
         />
 
+        <label htmlFor="email">Email *</label>
         <input
-          type="email"
+          id="email"
           name="email"
-          placeholder="Email"
+          type="email"
+          placeholder="Enter email"
           value={form.email}
           onChange={handleChange}
-          required
         />
 
+        <label htmlFor="phone">Phone *</label>
         <input
-          type="text"
+          id="phone"
           name="phone"
-          placeholder="Phone"
+          type="text"
+          placeholder="Enter phone number"
           value={form.phone}
           onChange={handleChange}
-          required
         />
 
+        <label htmlFor="company">Company</label>
         <input
-          type="text"
+          id="company"
           name="company"
-          placeholder="Company"
+          type="text"
+          placeholder="Enter company name"
           value={form.company}
           onChange={handleChange}
         />
 
+        <label htmlFor="purpose">Purpose *</label>
         <input
-          type="text"
+          id="purpose"
           name="purpose"
-          placeholder="Purpose"
+          type="text"
+          placeholder="Enter visit purpose"
           value={form.purpose}
           onChange={handleChange}
-          required
         />
 
+        <label htmlFor="idProofType">ID proof type</label>
         <input
-          type="text"
+          id="idProofType"
           name="idProofType"
-          placeholder="ID proof type"
+          type="text"
+          placeholder="Example: CNIC, Passport, Driving License"
           value={form.idProofType}
           onChange={handleChange}
         />
 
+        <label htmlFor="idProofNumber">ID proof number</label>
         <input
-          type="text"
+          id="idProofNumber"
           name="idProofNumber"
-          placeholder="ID proof number"
+          type="text"
+          placeholder="Enter ID proof number"
           value={form.idProofNumber}
           onChange={handleChange}
         />
 
-        <label>Visitor photo</label>
+        <label htmlFor="photo">Visitor photo</label>
         <input
+          id="photo"
           type="file"
           accept="image/*"
-          onChange={(e) => setPhoto(e.target.files[0])}
+          onChange={(e) => setPhoto(e.target.files?.[0] || null)}
         />
 
-        <label>ID proof image</label>
+        <label htmlFor="idProof">ID proof image</label>
         <input
+          id="idProof"
           type="file"
           accept="image/*"
-          onChange={(e) => setIdProof(e.target.files[0])}
+          onChange={(e) => setIdProof(e.target.files?.[0] || null)}
         />
 
-        {error ? <p className="error-text">{error}</p> : null}
+        {error && <div className="auth-error-box" role="alert">{error}</div>}
+        {success && <div className="success-box">{success}</div>}
 
         <button className="btn" disabled={loading}>
           {loading ? 'Saving...' : 'Save visitor'}
@@ -231,66 +275,86 @@ const VisitorsPage = () => {
 
       <div className="card">
         <div className="page-header-row">
-          <h3>Visitors list</h3>
+          <div>
+            <h3>Visitors list</h3>
+            <p className="muted-text">
+              Showing {filteredVisitors.length} of {visitors.length} visitors
+            </p>
+          </div>
 
           <div className="page-actions-row">
             <input
               type="text"
               placeholder="Search visitor"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
             />
 
-            <button type="button" className="btn" onClick={exportCsv}>
+            <button type="button" className="btn" onClick={handleExportCsv}>
               Export CSV
             </button>
           </div>
         </div>
 
-        <p className="muted-text">
-          Showing {filteredVisitors.length} of {visitors.length} visitors
-        </p>
+        {pageLoading ? (
+          <p className="muted-text">Loading visitors...</p>
+        ) : filteredVisitors.length === 0 ? (
+          <div className="empty-state-box">
+            <h4>No visitors found</h4>
+            <p>Try a different search or add a new visitor from the form.</p>
+          </div>
+        ) : (
+          <div className="list-stack">
+            {filteredVisitors.map((item) => (
+              <div className="list-item visitor-item" key={item._id}>
+                <div className="visitor-item-top">
+                  <div>
+                    <strong>{item.fullName || 'No name'}</strong>
+                    <p className="muted-text">{item.purpose || 'No purpose provided'}</p>
+                  </div>
+                  <span className="badge">
+                    {item.company || 'No company'}
+                  </span>
+                </div>
 
-        <div className="list-stack">
-          {filteredVisitors.length === 0 ? (
-            <p>No visitors found.</p>
-          ) : (
-            filteredVisitors.map((visitor) => (
-              <div className="list-item" key={visitor._id}>
-                <strong>{visitor.fullName}</strong>
-                <span>{visitor.email}</span>
-                <span>{visitor.phone}</span>
-                <span>{visitor.company || 'No company'}</span>
-                <span>{visitor.purpose}</span>
-                <span>
-                  {visitor.createdAt
-                    ? new Date(visitor.createdAt).toLocaleString()
-                    : 'No date'}
-                </span>
+                <div className="visitor-meta-grid">
+                  <span><strong>Email:</strong> {item.email || 'N/A'}</span>
+                  <span><strong>Phone:</strong> {item.phone || 'N/A'}</span>
+                  <span><strong>ID Type:</strong> {item.idProofType || 'N/A'}</span>
+                  <span><strong>ID No:</strong> {item.idProofNumber || 'N/A'}</span>
+                  <span>
+                    <strong>Created:</strong>{' '}
+                    {item.createdAt ? new Date(item.createdAt).toLocaleString() : 'No date'}
+                  </span>
+                </div>
 
-                {visitor.photoUrl ? (
-                  <a
-                    href={getFileUrl(visitor.photoUrl)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open photo
-                  </a>
-                ) : null}
+                <div className="action-row">
+                  {item.photoUrl && (
+                    <a
+                      href={getFileLink(item.photoUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn secondary btn.small"
+                    >
+                      Open photo
+                    </a>
+                  )}
 
-                {visitor.idProofUrl ? (
-                  <a
-                    href={getFileUrl(visitor.idProofUrl)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open ID proof
-                  </a>
-                ) : null}
+                  {item.idProofUrl && (
+                    <a
+                      href={getFileLink(item.idProofUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn secondary btn.small"
+                    >
+                      Open ID proof
+                    </a>
+                  )}
+                </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

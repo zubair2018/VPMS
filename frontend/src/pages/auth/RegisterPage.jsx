@@ -1,40 +1,97 @@
 import { useState } from 'react';
+import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const RegisterPage = () => {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'visitor' });
-  const [error, setError] = useState('');
-  const { register } = useAuth();
   const navigate = useNavigate();
+  const { login } = useAuth();
 
+  // Form state
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'visitor',
+  });
+
+  // Error state
+  const [error, setError] = useState('');
+
+  // Handle input change
+  const handleChange = (e) => {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  // Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
     try {
-      await register(form);
+      const res = await axios.post('http://localhost:5000/api/auth/register', form);
+
+      // Save token + user in context
+      login(res.data);
+
+      // Go to dashboard
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Register failed');
+      setError(err.response?.data?.message || 'Could not register user');
     }
   };
 
   return (
     <div className="auth-page">
-      <form className="card auth-card" onSubmit={handleSubmit}>
+      <div className="card auth-card">
         <h2>Register</h2>
-        <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <input type="password" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-          <option value="visitor">Visitor</option>
-          <option value="employee">Employee</option>
-          <option value="security">Security</option>
-          <option value="admin">Admin</option>
-        </select>
+
         {error && <p className="error-text">{error}</p>}
-        <button className="btn">Create account</button>
-        <p>Already have an account? <Link to="/login">Login</Link></p>
-      </form>
+
+        <form onSubmit={handleSubmit}>
+          <input
+            type="text"
+            name="name"
+            placeholder="Full name"
+            value={form.name}
+            onChange={handleChange}
+          />
+
+          <input
+            type="email"
+            name="email"
+            placeholder="Email"
+            value={form.email}
+            onChange={handleChange}
+          />
+
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            value={form.password}
+            onChange={handleChange}
+          />
+
+          <select name="role" value={form.role} onChange={handleChange}>
+            <option value="admin">Admin</option>
+            <option value="employee">Employee</option>
+            <option value="security">Security</option>
+            <option value="visitor">Visitor</option>
+          </select>
+
+          <button type="submit" className="btn">
+            Create account
+          </button>
+        </form>
+
+        <p>
+          Already have an account? <Link to="/login">Login</Link>
+        </p>
+      </div>
     </div>
   );
 };

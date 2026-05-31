@@ -1,17 +1,40 @@
-const User = require('../models/User');
-const generateToken = require('../utils/generateToken');
+// Import JWT package
+const jwt = require('jsonwebtoken');
 
-const register = async (req, res) => {
+// Import User model
+const User = require('../models/User');
+
+// Function to generate JWT token
+const generateToken = (user) => {
+  return jwt.sign(
+    {
+      id: user._id,
+      role: user.role,
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: '7d',
+    }
+  );
+};
+
+// Register controller
+const registerUser = async (req, res) => {
   try {
+    // Get data from frontend
     const { name, email, password, role } = req.body;
 
+    // Simple validation
     if (!name || !email || !password || !role) {
       return res.status(400).json({
-        message: 'Please fill all required fields',
+        message: 'All fields are required',
       });
     }
 
-    const existingUser = await User.findOne({ email });
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      email: email.toLowerCase().trim(),
+    });
 
     if (existingUser) {
       return res.status(400).json({
@@ -19,78 +42,94 @@ const register = async (req, res) => {
       });
     }
 
+    // Create new user
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       password,
-      role,
+      role: role.toLowerCase().trim(),
     });
 
-    return res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id),
+    // Generate token
+    const token = generateToken(user);
+
+    // Send response
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch (error) {
-    return res.status(500).json({
-      message: error.message || 'Registration failed',
+    console.error('REGISTER ERROR:', error);
+    res.status(500).json({
+      message: error.message,
     });
   }
 };
 
-const login = async (req, res) => {
+// Login controller
+const loginUser = async (req, res) => {
   try {
+    // Get email and password
     const { email, password } = req.body;
 
+    // Check empty fields
     if (!email || !password) {
       return res.status(400).json({
         message: 'Email and password are required',
       });
     }
 
-    const user = await User.findOne({ email });
+    // Find user by email
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    });
 
+    // If user not found
     if (!user) {
       return res.status(401).json({
-        message: 'Invalid credentials',
+        message: 'Invalid email or password',
       });
     }
 
+    // Compare password
     const isMatch = await user.matchPassword(password);
 
     if (!isMatch) {
       return res.status(401).json({
-        message: 'Invalid credentials',
+        message: 'Invalid email or password',
       });
     }
 
-    return res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id),
+    // Generate token
+    const token = generateToken(user);
+
+    // Send success response
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch (error) {
-    return res.status(500).json({
-      message: error.message || 'Login failed',
+    console.error('LOGIN ERROR:', error);
+    res.status(500).json({
+      message: error.message,
     });
   }
 };
 
-const me = async (req, res) => {
-  return res.json({
-    _id: req.user._id,
-    name: req.user.name,
-    email: req.user.email,
-    role: req.user.role,
-  });
-};
-
+// Export both functions
 module.exports = {
-  register,
-  login,
-  me,
+  registerUser,
+  loginUser,
 };

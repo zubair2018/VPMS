@@ -3,117 +3,150 @@ const Visitor = require('../models/Visitor');
 const User = require('../models/User');
 const sendEmail = require('../utils/mailer');
 
+// Create new appointment
 const createAppointment = async (req, res) => {
   try {
-    const { visitor, host, visitDate, notes } = req.body;
+    const visitorId = req.body.visitor;
+    const hostId = req.body.host;
+    const visitDate = req.body.visitDate;
+    const notes = req.body.notes;
 
-    if (!visitor || !host || !visitDate) {
+    // Basic validation
+    if (!visitorId || !hostId || !visitDate) {
       return res.status(400).json({
-        message: 'visitor, host and visitDate are required',
+        message: 'Visitor, host and visit date are required',
       });
     }
 
-    const visitorDoc = await Visitor.findById(visitor);
-    if (!visitorDoc) {
-      return res.status(404).json({ message: 'Visitor not found' });
+    // Check visitor
+    const visitorData = await Visitor.findById(visitorId);
+    if (!visitorData) {
+      return res.status(404).json({
+        message: 'Visitor not found',
+      });
     }
 
-    const hostUser = await User.findById(host);
-    if (!hostUser) {
-      return res.status(404).json({ message: 'Host user not found' });
+    // Check host user
+    const hostData = await User.findById(hostId);
+    if (!hostData) {
+      return res.status(404).json({
+        message: 'Host not found',
+      });
     }
 
-    if (hostUser.role !== 'employee') {
+    // Only employee can be host
+    if (hostData.role !== 'employee') {
       return res.status(400).json({
         message: 'Selected host must be an employee',
       });
     }
 
-    const appointment = await Appointment.create({
-      visitor,
-      host,
-      visitDate,
-      notes,
+    // Save appointment
+    const newAppointment = await Appointment.create({
+      visitor: visitorId,
+      host: hostId,
+      visitDate: visitDate,
+      notes: notes,
     });
 
-    const populatedAppointment = await Appointment.findById(appointment._id)
+    // Get appointment with full visitor and host details
+    const savedAppointment = await Appointment.findById(newAppointment._id)
       .populate('visitor')
       .populate('host', 'name email role');
 
-    if (visitorDoc.email) {
+    // Send email to visitor if email exists
+    if (visitorData.email) {
+      const emailHtml = `
+        <p>Hello ${visitorData.fullName},</p>
+        <p>Your appointment has been created.</p>
+        <p><strong>Host:</strong> ${hostData.name}</p>
+        <p><strong>Visit Date:</strong> ${new Date(visitDate).toLocaleString()}</p>
+        <p><strong>Notes:</strong> ${notes || 'No notes added'}</p>
+        <p>Your appointment is waiting for approval.</p>
+      `;
+
       await sendEmail({
-        to: visitorDoc.email,
-        subject: 'Visit appointment created',
-        html: `
-          <p>Hello ${visitorDoc.fullName},</p>
-          <p>Your appointment with ${hostUser.name} has been created and is waiting for approval.</p>
-          <p><strong>Visit Date:</strong> ${new Date(visitDate).toLocaleString()}</p>
-          <p><strong>Notes:</strong> ${notes || 'No notes added'}</p>
-        `,
+        to: visitorData.email,
+        subject: 'Appointment Created',
+        html: emailHtml,
       });
     }
 
-    return res.status(201).json(populatedAppointment);
+    res.status(201).json(savedAppointment);
   } catch (error) {
-    return res.status(500).json({
-      message: error.message || 'Failed to create appointment',
+    res.status(500).json({
+      message: 'Could not create appointment',
     });
   }
 };
 
+// Get appointments
 const getAppointments = async (req, res) => {
   try {
-    const filter = req.user.role === 'employee' ? { host: req.user._id } : {};
+    let findData = {};
 
-    const appointments = await Appointment.find(filter)
+    // If employee is logged in, only show their appointments
+    if (req.user.role === 'employee') {
+      findData.host = req.user._id;
+    }
+
+    const list = await Appointment.find(findData)
       .populate('visitor')
       .populate('host', 'name email role')
       .sort({ createdAt: -1 });
 
-    return res.json(appointments);
+    res.json(list);
   } catch (error) {
-    return res.status(500).json({
-      message: error.message || 'Failed to load appointments',
+    res.status(500).json({
+      message: 'Could not fetch appointments',
     });
   }
 };
 
+// Update appointment status or notes
 const updateAppointmentStatus = async (req, res) => {
   try {
-    const { status, notes } = req.body;
+    const appointmentId = req.params.id;
+    const status = req.body.status;
+    const notes = req.body.notes;
 
-    const appointment = await Appointment.findById(req.params.id);
+    const appointmentData = await Appointment.findById(appointmentId);
 
-    if (!appointment) {
-      return res.status(404).json({ message: 'Appointment not found' });
-    }
-
-    const allowedStatuses = ['pending', 'approved', 'rejected', 'completed'];
-
-    if (status && !allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: 'Invalid appointment status',
+    if (!appointmentData) {
+      return res.status(404).json({
+        message: 'Appointment not found',
       });
     }
 
+    const validStatusList = ['pending', 'approved', 'rejected', 'completed'];
+
+    // Check if status is valid
+    if (status && !validStatusList.includes(status)) {
+      return res.status(400).json({
+        message: 'Invalid status value',
+      });
+    }
+
+    // Update status if provided
     if (status) {
-      appointment.status = status;
+      appointmentData.status = status;
     }
 
+    // Update notes if provided
     if (notes !== undefined) {
-      appointment.notes = notes;
+      appointmentData.notes = notes;
     }
 
-    await appointment.save();
+    await appointmentData.save();
 
-    const populatedAppointment = await Appointment.findById(appointment._id)
+    const updatedAppointment = await Appointment.findById(appointmentData._id)
       .populate('visitor')
       .populate('host', 'name email role');
 
-    return res.json(populatedAppointment);
+    res.json(updatedAppointment);
   } catch (error) {
-    return res.status(500).json({
-      message: error.message || 'Failed to update appointment',
+    res.status(500).json({
+      message: 'Could not update appointment',
     });
   }
 };

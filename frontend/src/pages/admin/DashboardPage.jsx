@@ -1,55 +1,153 @@
 import { useEffect, useState } from 'react';
-import api from '../../api/axios';
+import axios from 'axios';
+import { useAuth } from '../../context/AuthContext';
 
 const DashboardPage = () => {
-  const [stats, setStats] = useState({ visitors: 0, appointments: 0, issuedPasses: 0, checkedIns: 0, recentLogs: [] });
+  const { user, token } = useAuth();
 
+  // Dashboard stats state
+  const [stats, setStats] = useState({
+    totalVisitors: 0,
+    totalPasses: 0,
+    checkedInPasses: 0,
+    checkedOutPasses: 0,
+    issuedPasses: 0,
+    expiredPasses: 0,
+    recentVisitors: [],
+    recentPasses: [],
+  });
+
+  // UI states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Function to fetch dashboard data from backend
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const response = await axios.get(
+        'http://localhost:5000/api/dashboard/stats',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      setStats(response.data);
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
+      setError(err.response?.data?.message || 'Could not load dashboard stats.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load dashboard data when token is available
   useEffect(() => {
-    api.get('/dashboard/stats').then((res) => setStats(res.data)).catch(() => {});
-  }, []);
+    if (token) {
+      fetchDashboardStats();
+    } else {
+      setLoading(false);
+      setError('User token not found. Please login again.');
+    }
+  }, [token]);
 
-  const cards = [
-    ['Total Visitors', stats.visitors],
-    ['Appointments', stats.appointments],
-    ['Issued Passes', stats.issuedPasses],
-    ['Checked In', stats.checkedIns]
+  // Simple helper array for stat cards
+  const statCards = [
+    { title: 'Total Visitors', value: stats.totalVisitors },
+    { title: 'Total Passes', value: stats.totalPasses },
+    { title: 'Checked In', value: stats.checkedInPasses },
+    { title: 'Checked Out', value: stats.checkedOutPasses },
+    { title: 'Issued Passes', value: stats.issuedPasses },
+    { title: 'Expired Passes', value: stats.expiredPasses },
   ];
 
+  // Show loading UI
+  if (loading) {
+    return (
+      <div className="card">
+        <h2>Dashboard</h2>
+        <p>Loading dashboard data...</p>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <div className="grid four">
-        {cards.map(([label, value]) => (
-          <div className="card stat-card" key={label}>
-            <p>{label}</p>
-            <h3>{value}</h3>
+    <div className="dashboard-page">
+      {/* Dashboard header card */}
+      <div className="card page-hero">
+        <div>
+          <p className="page-kicker">Overview</p>
+          <h2>Dashboard</h2>
+          <p className="muted-text">
+            Welcome, {user?.name || 'User'} ({user?.role || 'visitor'})
+          </p>
+        </div>
+
+        <button className="btn secondary" onClick={fetchDashboardStats}>
+          Refresh Data
+        </button>
+      </div>
+
+      {/* Error message */}
+      {error && <div className="auth-error-box">{error}</div>}
+
+      {/* Statistics cards */}
+      <div className="grid two">
+        {statCards.map((card) => (
+          <div className="card stat-card" key={card.title}>
+            <p className="stat-label">{card.title}</p>
+            <h3 className="stat-value">{card.value}</h3>
           </div>
         ))}
       </div>
 
+      {/* Recent visitors section */}
       <div className="card">
-        <h3>Recent scans</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Visitor</th>
-                <th>Pass</th>
-                <th>Action</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.recentLogs?.map((log) => (
-                <tr key={log._id}>
-                  <td>{log.pass?.visitor?.fullName || 'N/A'}</td>
-                  <td>{log.pass?.passNumber || 'N/A'}</td>
-                  <td>{log.action}</td>
-                  <td>{new Date(log.time).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <h3>Recent Visitors</h3>
+
+        {stats.recentVisitors.length === 0 ? (
+          <p>No recent visitors found.</p>
+        ) : (
+          <div className="list-stack">
+            {stats.recentVisitors.map((visitor) => (
+              <div key={visitor._id} className="list-item">
+                <strong>{visitor.fullName}</strong>
+                <span>Email: {visitor.email}</span>
+                <span>Phone: {visitor.phone}</span>
+                <span>Purpose: {visitor.purpose}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent passes section */}
+      <div className="card">
+        <h3>Recent Passes</h3>
+
+        {stats.recentPasses.length === 0 ? (
+          <p>No recent passes found.</p>
+        ) : (
+          <div className="list-stack">
+            {stats.recentPasses.map((pass) => (
+              <div key={pass._id} className="list-item">
+                <strong>{pass.passNumber}</strong>
+                <span>Status: {pass.status}</span>
+                <span>Visitor: {pass.visitor?.fullName || 'No visitor'}</span>
+                <span>
+                  Valid Till:{' '}
+                  {pass.validTill
+                    ? new Date(pass.validTill).toLocaleString()
+                    : 'N/A'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
