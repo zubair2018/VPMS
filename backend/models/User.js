@@ -1,62 +1,63 @@
-// Import mongoose for schema/model
+// Import mongoose to create schema and model
 const mongoose = require('mongoose');
 
-// Import bcryptjs to hash passwords
+// Import bcryptjs to hash and compare passwords
 const bcrypt = require('bcryptjs');
 
-// Create user schema
+// Create schema for User collection
 const userSchema = new mongoose.Schema(
   {
-    // User full name
+    // Full name of the user
     name: {
       type: String,
-      required: true,
-      trim: true,
+      required: true,   // name is compulsory
+      trim: true,       // removes extra spaces
     },
 
-    // User email
+    // Email of the user
     email: {
       type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
+      required: true,   // email is compulsory
+      unique: true,     // no two users can have same email
+      lowercase: true,  // convert email to lowercase automatically
+      trim: true,       // remove extra spaces
     },
 
-    // User password
+    // Password of the user
     password: {
       type: String,
-      required: true,
-      minlength: 6,
+      required: true,   // password is compulsory
+      minlength: 6,     // minimum 6 characters
     },
 
-    // User role
+    // Role of the user
     role: {
       type: String,
-      enum: ['admin', 'employee', 'security', 'visitor'],
-      default: 'visitor',
+      enum: ['admin', 'employee', 'security', 'visitor'], // allowed roles only
+      default: 'visitor',  // if no role is given, visitor will be used
       lowercase: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true } // automatically adds createdAt and updatedAt
 );
 
-// Before saving the user, hash the password
+// This runs before saving user data in MongoDB
 userSchema.pre('save', async function (next) {
-  // If password is not modified, continue
+  // If password was not changed, do not hash again
   if (!this.isModified('password')) {
     return next();
   }
 
-  // Hash password
+  // Hash the password before saving
   this.password = await bcrypt.hash(this.password, 10);
+
   next();
 });
 
-// Method to compare entered password with hashed password
+// Custom method to check entered password during login
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Export model
+// Export the User model
 module.exports = mongoose.model('User', userSchema);

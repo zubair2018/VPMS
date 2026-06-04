@@ -1,21 +1,17 @@
-// Import required packages
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const path = require('path');
 
-// Import route files
+// Load env variables first
+dotenv.config();
+
 const authRoutes = require('./routes/authRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const visitorRoutes = require('./routes/visitorRoutes');
 const appointmentRoutes = require('./routes/appointmentRoutes');
 const passRoutes = require('./routes/passRoutes');
 
-// Load .env file from backend folder
-dotenv.config({ path: path.join(__dirname, '.env') });
-
-// Create express app
 const app = express();
 
 // Middlewares
@@ -27,24 +23,22 @@ app.get('/', (req, res) => {
   res.send('API is running');
 });
 
-// API routes
+// Main routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/visitors', visitorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/passes', passRoutes);
 
-// If route is not found
+// Route not found
 app.use((req, res) => {
   res.status(404).json({
     message: 'Route not found',
   });
 });
 
-// Port number
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB, then start server
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
@@ -55,5 +49,5 @@ mongoose
     });
   })
   .catch((error) => {
-    console.error('DB connection failed:', error.message);
+    console.log('MongoDB error:', error.message);
   });

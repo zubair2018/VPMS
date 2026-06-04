@@ -1,15 +1,11 @@
-// Import JWT package
 const jwt = require('jsonwebtoken');
-
-// Import User model
 const User = require('../models/User');
 
-// Middleware to protect private routes
+// Protect routes
 const protect = async (req, res, next) => {
   try {
     let token;
 
-    // Check if Authorization header exists and starts with Bearer
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith('Bearer ')
@@ -17,40 +13,42 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
     }
 
-    // If token is missing
     if (!token) {
       return res.status(401).json({
-        message: 'No token, not authorizeRolesd',
+        message: 'Not authorized, token missing',
       });
     }
 
-    // Verify token using JWT secret
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Find user from database and remove password field
-    req.user = await User.findById(decoded.id).select('-password');
+    const user = await User.findById(decoded.id).select('-password');
 
-    // If user does not exist anymore
-    if (!req.user) {
+    if (!user) {
       return res.status(401).json({
         message: 'User not found',
       });
     }
 
+    req.user = user;
     next();
   } catch (error) {
-    console.error('AUTH ERROR:', error.message);
-
+    console.log('Protect middleware error:', error.message);
     return res.status(401).json({
-      message: 'Token failed',
+      message: 'Invalid token',
     });
   }
 };
 
-// Middleware for role checking
+// Role-based access
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!req.user) {
+      return res.status(401).json({
+        message: 'User not authorized',
+      });
+    }
+
+    if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         message: 'Access denied',
       });

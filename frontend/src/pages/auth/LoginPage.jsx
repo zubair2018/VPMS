@@ -7,16 +7,16 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  // Form state
+  // Store form values
   const [form, setForm] = useState({
     email: '',
     password: '',
   });
 
-  // Error state
+  // Store error message
   const [error, setError] = useState('');
 
-  // Handle input change
+  // Update form when user types
   const handleChange = (e) => {
     setForm({
       ...form,
@@ -24,20 +24,22 @@ const LoginPage = () => {
     });
   };
 
-  // Handle submit
+  // Run when form is submitted
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     try {
+      // Send login data to backend
       const res = await axios.post('http://localhost:5000/api/auth/login', form);
 
-      // Save token + user
+      // Save token and user data in AuthContext + localStorage
       login(res.data);
 
-      // Go to dashboard
+      // Go to dashboard after successful login
       navigate('/');
     } catch (err) {
+      // Show error from backend or default message
       setError(err.response?.data?.message || 'Login failed');
     }
   };
@@ -47,6 +49,7 @@ const LoginPage = () => {
       <div className="card auth-card">
         <h2>Login</h2>
 
+        {/* Show error if login fails */}
         {error && <p className="error-text">{error}</p>}
 
         <form onSubmit={handleSubmit}>

@@ -1,9 +1,17 @@
 const express = require('express');
-const { createAppointment, getAppointments, updateAppointmentStatus } = require('../controllers/appointmentController');
+const router = express.Router();
+
+const {
+  createAppointment,
+  getAppointments,
+} = require('../controllers/appointmentController');
+
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
-const router = express.Router();
-router.route('/').get(protect, getAppointments).post(protect, authorizeRoles('admin', 'employee'), createAppointment);
-router.put('/:id/status', protect, authorizeRoles('admin', 'employee'), updateAppointmentStatus);
+// Get all appointments
+router.get('/', protect, getAppointments);
+
+// Create a new appointment
+router.post('/', protect, authorizeRoles('admin', 'employee'), createAppointment);
 
 module.exports = router;

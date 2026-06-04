@@ -1,134 +1,137 @@
-// Import JWT package
 const jwt = require('jsonwebtoken');
-
-// Import User model
 const User = require('../models/User');
 
-// Function to generate JWT token
-const generateToken = (user) => {
+// This function creates a JWT token
+const makeToken = (userId, userRole) => {
   return jwt.sign(
     {
-      id: user._id,
-      role: user.role,
+      id: userId,     // store user id in token
+      role: userRole, // store user role in token
     },
-    process.env.JWT_SECRET,
+    process.env.JWT_SECRET, // secret key from .env file
     {
-      expiresIn: '7d',
+      expiresIn: '7d', // token will expire in 7 days
     }
   );
 };
 
-// Register controller
+// Register a new user
 const registerUser = async (req, res) => {
   try {
-    // Get data from frontend
-    const { name, email, password, role } = req.body;
+    // Get data from request body
+    const name = req.body.name;
+    const email = req.body.email;
+    const password = req.body.password;
+    const role = req.body.role;
 
-    // Simple validation
+    // Check if any field is missing
     if (!name || !email || !password || !role) {
       return res.status(400).json({
-        message: 'All fields are required',
+        message: 'Please fill all fields',
       });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({
+    // Check if user already exists in database
+    const userExists = await User.findOne({
       email: email.toLowerCase().trim(),
     });
 
-    if (existingUser) {
+    if (userExists) {
       return res.status(400).json({
         message: 'User already exists',
       });
     }
 
-    // Create new user
-    const user = await User.create({
+    // Create new user in database
+    const newUser = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      password,
+      password: password,
       role: role.toLowerCase().trim(),
     });
 
-    // Generate token
-    const token = generateToken(user);
+    // Create token for the new user
+    const token = makeToken(newUser._id, newUser.role);
 
-    // Send response
-    res.status(201).json({
-      message: 'User registered successfully',
-      token,
+    // Send success response
+    return res.status(201).json({
+      message: 'User registered',
+      token: token,
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
       },
     });
   } catch (error) {
-    console.error('REGISTER ERROR:', error);
-    res.status(500).json({
-      message: error.message,
+    console.log('Register error:', error.message);
+
+    return res.status(500).json({
+      message: 'Server error during registration',
     });
   }
 };
 
-// Login controller
+// Login existing user
 const loginUser = async (req, res) => {
   try {
-    // Get email and password
-    const { email, password } = req.body;
+    // Get email and password from request body
+    const email = req.body.email;
+    const password = req.body.password;
 
-    // Check empty fields
+    // Check if email and password were sent
     if (!email || !password) {
       return res.status(400).json({
-        message: 'Email and password are required',
+        message: 'Please enter email and password',
       });
     }
 
-    // Find user by email
-    const user = await User.findOne({
+    // Find user in database by email
+    const foundUser = await User.findOne({
       email: email.toLowerCase().trim(),
     });
 
-    // If user not found
-    if (!user) {
+    // If user does not exist
+    if (!foundUser) {
       return res.status(401).json({
         message: 'Invalid email or password',
       });
     }
 
-    // Compare password
-    const isMatch = await user.matchPassword(password);
+    // Compare entered password with stored password
+    const passwordMatched = await foundUser.matchPassword(password);
 
-    if (!isMatch) {
+    // If password is wrong
+    if (!passwordMatched) {
       return res.status(401).json({
         message: 'Invalid email or password',
       });
     }
 
-    // Generate token
-    const token = generateToken(user);
+    // Create token for logged-in user
+    const token = makeToken(foundUser._id, foundUser.role);
 
     // Send success response
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Login successful',
-      token,
+      token: token,
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
+        id: foundUser._id,
+        name: foundUser.name,
+        email: foundUser.email,
+        role: foundUser.role,
       },
     });
   } catch (error) {
-    console.error('LOGIN ERROR:', error);
-    res.status(500).json({
-      message: error.message,
+    console.log('Login error:', error.message);
+
+    return res.status(500).json({
+      message: 'Server error during login',
     });
   }
 };
 
-// Export both functions
 module.exports = {
   registerUser,
   loginUser,

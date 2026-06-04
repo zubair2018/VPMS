@@ -1,20 +1,25 @@
 const express = require('express');
 const router = express.Router();
 
-// Import controller functions
 const {
-  createAppointment,
-  getAppointments,
-} = require('../controllers/appointmentController');
+  createVisitor,
+  getVisitors,
+  publicRegisterVisitor,
+  getVisitorPassByEmail,
+} = require('../controllers/visitorController');
 
-// Import auth middlewares
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
-// GET all appointments
-// POST create new appointment
-router
-  .route('/')
-  .get(protect, getAppointments)
-  .post(protect, authorizeRoles('admin', 'employee'), createAppointment);
+// Public visitor registration
+router.post('/register', publicRegisterVisitor);
+
+// Public pass lookup by email
+router.get('/pass', getVisitorPassByEmail);
+
+// Get all visitors
+router.get('/', protect, getVisitors);
+
+// Create visitor manually
+router.post('/', protect, authorizeRoles('admin', 'employee'), createVisitor);
 
 module.exports = router;

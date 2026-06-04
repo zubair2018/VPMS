@@ -1,18 +1,22 @@
 import axios from 'axios';
 
+// Create one axios instance for all API requests
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
 });
 
+// Add token automatically before every request
 api.interceptors.request.use(
   function (config) {
-    const savedUser = localStorage.getItem('visitor-pass-auth');
+    // Read saved login data from localStorage
+    const savedAuth = localStorage.getItem('vpms_auth');
 
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
+    if (savedAuth) {
+      const parsedAuth = JSON.parse(savedAuth);
 
-      if (parsedUser && parsedUser.token) {
-        config.headers.Authorization = 'Bearer ' + parsedUser.token;
+      // If token exists, add it to request header
+      if (parsedAuth && parsedAuth.token) {
+        config.headers.Authorization = 'Bearer ' + parsedAuth.token;
       }
     }
 

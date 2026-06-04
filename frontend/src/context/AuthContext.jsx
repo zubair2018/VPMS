@@ -1,11 +1,11 @@
 import { createContext, useContext, useState } from 'react';
 
-// Create auth context
+// Create a context for authentication
 const AuthContext = createContext();
 
 // Provider component
 export const AuthProvider = ({ children }) => {
-  // Read saved auth data safely
+  // Function to safely read saved login data from localStorage
   const getSavedAuth = () => {
     try {
       const saved = localStorage.getItem('vpms_auth');
@@ -20,13 +20,13 @@ export const AuthProvider = ({ children }) => {
   // Store auth data in state
   const [auth, setAuth] = useState(getSavedAuth());
 
-  // Save login/register response
+  // Save login or register response
   const login = (data) => {
     setAuth(data);
     localStorage.setItem('vpms_auth', JSON.stringify(data));
   };
 
-  // Logout user
+  // Remove auth data when user logs out
   const logout = () => {
     setAuth(null);
     localStorage.removeItem('vpms_auth');
@@ -35,9 +35,9 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider
       value={{
-        auth,
-        user: auth?.user || null,
-        token: auth?.token || null,
+        auth,                 // full auth response
+        user: auth?.user || null,   // logged-in user
+        token: auth?.token || null, // jwt token
         login,
         logout,
       }}
@@ -47,5 +47,5 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Custom hook
+// Custom hook to use auth context easily
 export const useAuth = () => useContext(AuthContext);
