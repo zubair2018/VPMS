@@ -18,20 +18,16 @@ import VisitorRegisterPage from './pages/public/VisitorRegisterPage';
 import VisitorPassLookupPage from './pages/public/VisitorPassLookupPage';
 
 function App() {
-  // Get logged-in user data from AuthContext
   const { user } = useAuth();
 
   return (
     <Routes>
-      {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
-      {/* Public visitor routes */}
       <Route path="/visitor/register" element={<VisitorRegisterPage />} />
       <Route path="/visitor/pass" element={<VisitorPassLookupPage />} />
 
-      {/* Protected dashboard routes */}
       <Route
         path="/"
         element={
@@ -40,14 +36,10 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* Default page after login */}
         <Route index element={<DashboardPage />} />
-
-        {/* Normal protected pages */}
         <Route path="visitors" element={<VisitorsPage />} />
         <Route path="appointments" element={<AppointmentsPage />} />
 
-        {/* Only admin and security can open passes page */}
         <Route
           path="passes"
           element={
@@ -57,7 +49,6 @@ function App() {
           }
         />
 
-        {/* Only admin and security can open scan page */}
         <Route
           path="scan"
           element={
@@ -68,11 +59,7 @@ function App() {
         />
       </Route>
 
-      {/* If user types wrong URL, redirect */}
-      <Route
-        path="*"
-        element={<Navigate to={user ? '/' : '/login'} replace />}
-      />
+      <Route path="*" element={<Navigate to={user ? '/' : '/login'} replace />} />
     </Routes>
   );
 }

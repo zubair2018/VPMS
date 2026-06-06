@@ -1,138 +1,93 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// This function creates a JWT token
-const makeToken = (userId, userRole) => {
-  return jwt.sign(
-    {
-      id: userId,     // store user id in token
-      role: userRole, // store user role in token
-    },
-    process.env.JWT_SECRET, // secret key from .env file
-    {
-      expiresIn: '7d', // token will expire in 7 days
-    }
-  );
+const createToken = (id, role) => {
+  return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
-// Register a new user
 const registerUser = async (req, res) => {
   try {
-    // Get data from request body
-    const name = req.body.name;
-    const email = req.body.email;
-    const password = req.body.password;
-    const role = req.body.role;
+    const { name, email, password, role } = req.body;
 
-    // Check if any field is missing
     if (!name || !email || !password || !role) {
-      return res.status(400).json({
-        message: 'Please fill all fields',
-      });
+      return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Check if user already exists in database
-    const userExists = await User.findOne({
-      email: email.toLowerCase().trim(),
-    });
+    const cleanEmail = email.trim().toLowerCase();
 
-    if (userExists) {
-      return res.status(400).json({
-        message: 'User already exists',
-      });
+    const existingUser = await User.findOne({ email: cleanEmail });
+
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists' });
     }
 
-    // Create new user in database
-    const newUser = await User.create({
+    const user = await User.create({
       name: name.trim(),
-      email: email.toLowerCase().trim(),
-      password: password,
-      role: role.toLowerCase().trim(),
+      email: cleanEmail,
+      password,
+      role: role.trim().toLowerCase(),
     });
 
-    // Create token for the new user
-    const token = makeToken(newUser._id, newUser.role);
+    const token = createToken(user._id, user.role);
 
-    // Send success response
-    return res.status(201).json({
-      message: 'User registered',
-      token: token,
+    res.status(201).json({
+      token,
       user: {
-        id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
     console.log('Register error:', error.message);
-
-    return res.status(500).json({
-      message: 'Server error during registration',
-    });
+    res.status(500).json({ message: 'Registration failed' });
   }
 };
 
-// Login existing user
 const loginUser = async (req, res) => {
   try {
-    // Get email and password from request body
-    const email = req.body.email;
-    const password = req.body.password;
+    const { email, password } = req.body;
 
-    // Check if email and password were sent
+    console.log('Login request email:', email);
+
     if (!email || !password) {
-      return res.status(400).json({
-        message: 'Please enter email and password',
-      });
+      return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // Find user in database by email
-    const foundUser = await User.findOne({
-      email: email.toLowerCase().trim(),
-    });
+    const cleanEmail = email.trim().toLowerCase();
 
-    // If user does not exist
-    if (!foundUser) {
-      return res.status(401).json({
-        message: 'Invalid email or password',
-      });
+    const user = await User.findOne({ email: cleanEmail });
+
+    console.log('User found:', !!user);
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Compare entered password with stored password
-    const passwordMatched = await foundUser.matchPassword(password);
+    const isMatch = await user.matchPassword(password);
 
-    // If password is wrong
-    if (!passwordMatched) {
-      return res.status(401).json({
-        message: 'Invalid email or password',
-      });
+    console.log('Password matched:', isMatch);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Create token for logged-in user
-    const token = makeToken(foundUser._id, foundUser.role);
+    const token = createToken(user._id, user.role);
 
-    // Send success response
-    return res.status(200).json({
-      message: 'Login successful',
-      token: token,
+    res.json({
+      token,
       user: {
-        id: foundUser._id,
-        name: foundUser.name,
-        email: foundUser.email,
-        role: foundUser.role,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
     console.log('Login error:', error.message);
-
-    return res.status(500).json({
-      message: 'Server error during login',
-    });
+    res.status(500).json({ message: 'Login failed' });
   }
 };
 
-module.exports = {
-  registerUser,
-  loginUser,
-};
+module.exports = { registerUser, loginUser };

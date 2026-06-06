@@ -23,10 +23,6 @@ const PassesPage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     try {
       setPageLoading(true);
@@ -48,6 +44,10 @@ const PassesPage = () => {
     }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -64,11 +64,11 @@ const PassesPage = () => {
   const getFileLink = (filePath) => {
     if (!filePath) return '';
 
-    const base = api.defaults.baseURL
+    const baseURL = api.defaults.baseURL
       ? api.defaults.baseURL.replace('/api', '')
       : '';
 
-    return base + filePath;
+    return baseURL + filePath;
   };
 
   const handleSubmit = async (e) => {
@@ -91,12 +91,7 @@ const PassesPage = () => {
       setError('');
       setSuccess('');
 
-      await api.post('/passes', {
-        visitorId: form.visitorId,
-        appointmentId: form.appointmentId,
-        validFrom: form.validFrom,
-        validTill: form.validTill,
-      });
+      await api.post('/passes', form);
 
       setForm(initialForm);
       setSuccess('Pass generated successfully.');
@@ -142,9 +137,9 @@ const PassesPage = () => {
 
   const sortedPasses = useMemo(() => {
     return [...filteredPasses].sort((a, b) => {
-      const first = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const second = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return second - first;
+      const aTime = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
     });
   }, [filteredPasses]);
 
@@ -189,16 +184,16 @@ const PassesPage = () => {
     ].join('\n');
 
     const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
-    const fileUrl = window.URL.createObjectURL(blob);
+    const url = window.URL.createObjectURL(blob);
 
     const a = document.createElement('a');
-    a.href = fileUrl;
+    a.href = url;
     a.download = 'passes.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
 
-    window.URL.revokeObjectURL(fileUrl);
+    window.URL.revokeObjectURL(url);
   };
 
   const getStatusClass = (status) => {
@@ -215,7 +210,7 @@ const PassesPage = () => {
         <div className="section-head">
           <div>
             <h3>Issue pass</h3>
-            <p>Create a visitor pass with optional approved appointment mapping.</p>
+            <p>Create a visitor pass with optional appointment mapping.</p>
           </div>
         </div>
 
@@ -247,8 +242,7 @@ const PassesPage = () => {
           </option>
           {approvedAppointments.map((item) => (
             <option key={item._id} value={item._id}>
-              {(item.visitor && item.visitor.fullName) || 'Visitor'} -{' '}
-              {(item.host && item.host.name) || 'Host'}
+              {item.visitor?.fullName || 'Visitor'} - {item.host?.name || 'Host'}
             </option>
           ))}
         </select>
@@ -271,7 +265,7 @@ const PassesPage = () => {
           onChange={handleChange}
         />
 
-        {error && <div className="auth-error-box" role="alert">{error}</div>}
+        {error && <div className="auth-error-box">{error}</div>}
         {success && <div className="success-box">{success}</div>}
 
         <button className="btn" disabled={loading}>
@@ -369,7 +363,7 @@ const PassesPage = () => {
                         href={getFileLink(item.pdfPath)}
                         target="_blank"
                         rel="noreferrer"
-                        className="btn secondary btn.small"
+                        className="btn secondary small"
                       >
                         Open PDF pass
                       </a>

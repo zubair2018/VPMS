@@ -36,9 +36,7 @@ const AppointmentsPage = () => {
       setVisitors(Array.isArray(visitorsRes.data) ? visitorsRes.data : []);
       setEmployees(Array.isArray(employeesRes.data) ? employeesRes.data : []);
     } catch (err) {
-      setError(
-        err?.response?.data?.message || 'Failed to load appointments data'
-      );
+      setError(err?.response?.data?.message || 'Failed to load appointments data');
     } finally {
       setPageLoading(false);
     }
@@ -49,7 +47,10 @@ const AppointmentsPage = () => {
   }, []);
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
 
     if (error) setError('');
     if (success) setSuccess('');
@@ -69,20 +70,13 @@ const AppointmentsPage = () => {
       setError('');
       setSuccess('');
 
-      await api.post('/appointments', {
-        visitor: form.visitor,
-        host: form.host,
-        visitDate: form.visitDate,
-        notes: form.notes,
-      });
+      await api.post('/appointments', form);
 
       setForm(initialForm);
       setSuccess('Appointment created successfully.');
       await loadData();
     } catch (err) {
-      setError(
-        err?.response?.data?.message || 'Failed to create appointment'
-      );
+      setError(err?.response?.data?.message || 'Failed to create appointment');
       setSuccess('');
     } finally {
       setLoading(false);
@@ -96,12 +90,11 @@ const AppointmentsPage = () => {
       setSuccess('');
 
       await api.put(`/appointments/${id}/status`, { status });
+
       setSuccess(`Appointment ${status} successfully.`);
       await loadData();
     } catch (err) {
-      setError(
-        err?.response?.data?.message || 'Failed to update status'
-      );
+      setError(err?.response?.data?.message || 'Failed to update status');
     } finally {
       setStatusLoadingId('');
     }
@@ -109,9 +102,9 @@ const AppointmentsPage = () => {
 
   const sortedAppointments = useMemo(() => {
     return [...appointments].sort((a, b) => {
-      const first = a?.visitDate ? new Date(a.visitDate).getTime() : 0;
-      const second = b?.visitDate ? new Date(b.visitDate).getTime() : 0;
-      return second - first;
+      const aTime = a?.visitDate ? new Date(a.visitDate).getTime() : 0;
+      const bTime = b?.visitDate ? new Date(b.visitDate).getTime() : 0;
+      return bTime - aTime;
     });
   }, [appointments]);
 
@@ -176,12 +169,12 @@ const AppointmentsPage = () => {
         <textarea
           id="notes"
           name="notes"
-          placeholder="Purpose details, floor, department, or special instructions"
+          placeholder="Purpose details or instructions"
           value={form.notes}
           onChange={handleChange}
         />
 
-        {error && <div className="auth-error-box" role="alert">{error}</div>}
+        {error && <div className="auth-error-box">{error}</div>}
         {success && <div className="success-box">{success}</div>}
 
         <button className="btn" disabled={loading}>
@@ -193,7 +186,7 @@ const AppointmentsPage = () => {
         <div className="section-head">
           <div>
             <h3>Appointments</h3>
-            <p>Review visitor meetings and update approval status.</p>
+            <p>Review meetings and update approval status.</p>
           </div>
         </div>
 
@@ -202,7 +195,7 @@ const AppointmentsPage = () => {
         ) : sortedAppointments.length === 0 ? (
           <div className="empty-state-box">
             <h4>No appointments found</h4>
-            <p>Create a new appointment using the form on the left.</p>
+            <p>Create a new appointment using the form.</p>
           </div>
         ) : (
           <div className="list-stack">
@@ -213,11 +206,9 @@ const AppointmentsPage = () => {
                 <div className="list-item appointment-item" key={item._id}>
                   <div className="appointment-head">
                     <div>
-                      <strong>
-                        {(item.visitor && item.visitor.fullName) || 'Unknown visitor'}
-                      </strong>
+                      <strong>{item.visitor?.fullName || 'Unknown visitor'}</strong>
                       <p className="muted-text">
-                        Host: {(item.host && item.host.name) || 'Unknown employee'}
+                        Host: {item.host?.name || 'Unknown employee'}
                       </p>
                     </div>
 
@@ -228,7 +219,7 @@ const AppointmentsPage = () => {
 
                   <div className="visitor-meta-grid">
                     <span>
-                      <strong>Host email:</strong> {(item.host && item.host.email) || 'N/A'}
+                      <strong>Host email:</strong> {item.host?.email || 'N/A'}
                     </span>
                     <span>
                       <strong>Visit:</strong>{' '}

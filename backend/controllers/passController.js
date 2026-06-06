@@ -6,69 +6,52 @@ const generatePassAssets = require('../utils/generatePassAssets');
 const sendSms = require('../utils/sendSms');
 const sendEmail = require('../utils/mailer');
 
-// Create new pass
 const createPass = async (req, res) => {
   try {
-    const visitorId = req.body.visitorId;
-    const appointmentId = req.body.appointmentId;
-    const validFrom = req.body.validFrom;
-    const validTill = req.body.validTill;
+    const { visitorId, appointmentId, validFrom, validTill } = req.body;
 
-    // Check required fields
     if (!visitorId || !validFrom || !validTill) {
       return res.status(400).json({
         message: 'Visitor, valid from and valid till are required',
       });
     }
 
-    // Find visitor
-    const visitorData = await Visitor.findById(visitorId);
-
-    if (!visitorData) {
-      return res.status(404).json({
-        message: 'Visitor not found',
-      });
+    const visitor = await Visitor.findById(visitorId);
+    if (!visitor) {
+      return res.status(404).json({ message: 'Visitor not found' });
     }
 
-    // If appointment is sent, check it
-    let appointmentData = null;
+    let appointment = null;
 
     if (appointmentId) {
-      appointmentData = await Appointment.findById(appointmentId);
+      appointment = await Appointment.findById(appointmentId);
 
-      if (!appointmentData) {
-        return res.status(404).json({
-          message: 'Appointment not found',
-        });
+      if (!appointment) {
+        return res.status(404).json({ message: 'Appointment not found' });
       }
     }
 
-    // Make a simple pass number
     const passNumber = 'VP-' + Date.now();
 
-    // Generate QR code and PDF
-    // This function creates the pass assets based on visitor details
     const passFiles = await generatePassAssets({
-      passNumber: passNumber,
-      visitorName: visitorData.fullName,
-      purpose: visitorData.purpose,
-      validTill: validTill,
+      passNumber,
+      visitorName: visitor.fullName,
+      purpose: visitor.purpose,
+      validTill,
     });
 
-    // Save pass in database
-    const newPass = await Pass.create({
-      visitor: visitorData._id,
-      appointment: appointmentData ? appointmentData._id : null,
+    const pass = await Pass.create({
+      visitor: visitor._id,
+      appointment: appointment ? appointment._id : null,
       issuedBy: req.user._id,
-      passNumber: passNumber,
+      passNumber,
       qrCodeDataUrl: passFiles.qrCodeDataUrl,
       pdfPath: passFiles.pdfPath,
-      validFrom: validFrom,
-      validTill: validTill,
+      validFrom,
+      validTill,
     });
 
-    // Populate related data so frontend gets full names instead of only ids
-    const savedPass = await Pass.findById(newPass._id)
+    const savedPass = await Pass.findById(pass._id)
       .populate('visitor')
       .populate({
         path: 'appointment',
@@ -79,39 +62,32 @@ const createPass = async (req, res) => {
       })
       .populate('issuedBy', 'name role');
 
-    // Send SMS if visitor phone exists
-    if (visitorData.phone) {
-      const smsText =
-        'Your visitor pass is ready. Pass Number: ' +
-        passNumber +
-        '. Valid From: ' +
-        new Date(validFrom).toLocaleString() +
-        '. Valid Till: ' +
-        new Date(validTill).toLocaleString();
-
+    if (visitor.phone) {
       try {
-        await sendSms(visitorData.phone, smsText);
+        const smsText =
+          `Your visitor pass is ready. Pass Number: ${passNumber}. ` +
+          `Valid From: ${new Date(validFrom).toLocaleString()}. ` +
+          `Valid Till: ${new Date(validTill).toLocaleString()}`;
+
+        await sendSms(visitor.phone, smsText);
       } catch (smsError) {
         console.log('SMS not sent');
       }
     }
 
-    // Send email if visitor email exists
-    if (visitorData.email) {
-      const emailHtml = `
-        <p>Hello ${visitorData.fullName},</p>
-        <p>Your visitor pass has been generated.</p>
-        <p><strong>Pass Number:</strong> ${passNumber}</p>
-        <p><strong>Purpose:</strong> ${visitorData.purpose || 'N/A'}</p>
-        <p><strong>Valid From:</strong> ${new Date(validFrom).toLocaleString()}</p>
-        <p><strong>Valid Till:</strong> ${new Date(validTill).toLocaleString()}</p>
-      `;
-
+    if (visitor.email) {
       try {
         await sendEmail({
-          to: visitorData.email,
+          to: visitor.email,
           subject: 'Visitor Pass Generated',
-          html: emailHtml,
+          html: `
+            <p>Hello ${visitor.fullName},</p>
+            <p>Your visitor pass has been generated.</p>
+            <p><strong>Pass Number:</strong> ${passNumber}</p>
+            <p><strong>Purpose:</strong> ${visitor.purpose || 'N/A'}</p>
+            <p><strong>Valid From:</strong> ${new Date(validFrom).toLocaleString()}</p>
+            <p><strong>Valid Till:</strong> ${new Date(validTill).toLocaleString()}</p>
+          `,
         });
       } catch (emailError) {
         console.log('Email not sent');
@@ -120,16 +96,14 @@ const createPass = async (req, res) => {
 
     res.status(201).json(savedPass);
   } catch (error) {
-    res.status(500).json({
-      message: 'Could not create pass',
-    });
+    console.log('Create pass error:', error.message);
+    res.status(500).json({ message: 'Could not create pass' });
   }
 };
 
-// Get all passes
 const getPasses = async (req, res) => {
   try {
-    const passList = await Pass.find()
+    const passes = await Pass.find()
       .populate('visitor')
       .populate({
         path: 'appointment',
@@ -141,70 +115,57 @@ const getPasses = async (req, res) => {
       .populate('issuedBy', 'name role')
       .sort({ createdAt: -1 });
 
-    res.json(passList);
+    res.json(passes);
   } catch (error) {
-    res.status(500).json({
-      message: 'Could not get passes',
-    });
+    console.log('Get passes error:', error.message);
+    res.status(500).json({ message: 'Could not get passes' });
   }
 };
 
-// Scan pass for check-in and check-out
 const scanPass = async (req, res) => {
   try {
-    const passNumber = req.body.passNumber;
+    const { passNumber } = req.body;
 
     if (!passNumber) {
-      return res.status(400).json({
-        message: 'Pass number is required',
-      });
+      return res.status(400).json({ message: 'Pass number is required' });
     }
 
-    const passData = await Pass.findOne({ passNumber: passNumber }).populate('visitor');
+    const pass = await Pass.findOne({ passNumber }).populate('visitor');
 
-    if (!passData) {
-      return res.status(404).json({
-        message: 'Pass not found',
-      });
+    if (!pass) {
+      return res.status(404).json({ message: 'Pass not found' });
     }
 
     let action = '';
 
-    // First scan means visitor entered
-    if (passData.status === 'issued') {
-      passData.status = 'checked-in';
+    if (pass.status === 'issued') {
+      pass.status = 'checked-in';
       action = 'check-in';
-    }
-    // Second scan means visitor left
-    else if (passData.status === 'checked-in') {
-      passData.status = 'checked-out';
+    } else if (pass.status === 'checked-in') {
+      pass.status = 'checked-out';
       action = 'check-out';
-    }
-    // Other states are not allowed
-    else {
+    } else {
       return res.status(400).json({
         message: 'This pass cannot be scanned now',
       });
     }
 
-    await passData.save();
+    await pass.save();
 
-    // Save scan activity in check log
-    const checkLog = await CheckLog.create({
-      pass: passData._id,
-      action: action,
+    const log = await CheckLog.create({
+      pass: pass._id,
+      action,
       scannedBy: req.user._id,
     });
 
     res.json({
-      message: 'Pass ' + action + ' successful',
-      pass: passData,
-      log: checkLog,
+      message: `Pass ${action} successful`,
+      pass,
+      log,
     });
   } catch (error) {
-    res.status(500).json({
-      message: 'Could not scan pass',
-    });
+    console.log('Scan pass error:', error.message);
+    res.status(500).json({ message: 'Could not scan pass' });
   }
 };
 
